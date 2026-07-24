@@ -115,4 +115,66 @@ export class Sfx {
     const ctx = this._ensure(); if (!ctx) return;
     this._tone(520, ctx.currentTime, 0.05, { type: "square", gain: 0.12 });
   }
+
+  // ---- Aura hit sounds (id matches AURAS[].sfx) ----
+  aura(kind, combo = 0) {
+    const ctx = this._ensure(); if (!ctx) return;
+    const t = ctx.currentTime;
+    switch (kind) {
+      case "fire":
+        this._noise(t, 0.09, { gain: 0.2, hp: 900 });
+        this._tone(90, t, 0.1, { type: "sawtooth", gain: 0.1, glideTo: 55 });
+        break;
+      case "ice":
+        this._tone(1800 + Math.random() * 600, t, 0.12, { type: "triangle", gain: 0.16 });
+        this._tone(2600, t, 0.08, { type: "sine", gain: 0.1, delay: 0.03 });
+        break;
+      case "zap":
+        this._noise(t, 0.05, { gain: 0.24, hp: 3000 });
+        this._tone(300, t, 0.09, { type: "square", gain: 0.14, glideTo: 90 });
+        break;
+      case "bubble":
+        this._tone(300 + Math.random() * 200, t, 0.1, { type: "sine", gain: 0.18, glideTo: 700 });
+        break;
+      case "boom":
+        this._tone(90, t, 0.22, { type: "sawtooth", gain: 0.2, glideTo: 35 });
+        break;
+      case "coin":
+        this._tone(1567, t, 0.09, { type: "square", gain: 0.14 });
+        this._tone(2093, t, 0.14, { type: "square", gain: 0.12, delay: 0.06 });
+        break;
+      case "sparkle":
+        this._tone(1200 + Math.random() * 800, t, 0.1, { type: "triangle", gain: 0.14 });
+        break;
+      default:
+        this.clap(combo);
+    }
+  }
+
+  bossHit() {
+    const ctx = this._ensure(); if (!ctx) return;
+    const t = ctx.currentTime;
+    this._tone(160 + Math.random() * 60, t, 0.08, { type: "square", gain: 0.16, glideTo: 80 });
+  }
+
+  shieldBlock() {
+    const ctx = this._ensure(); if (!ctx) return;
+    this._tone(420, ctx.currentTime, 0.1, { type: "sine", gain: 0.14, glideTo: 300 });
+  }
+
+  bossDown() {
+    const ctx = this._ensure(); if (!ctx) return;
+    const t = ctx.currentTime;
+    this._tone(80, t, 0.7, { type: "sawtooth", gain: 0.4, glideTo: 30 });
+    this._noise(t, 0.6, { gain: 0.3, hp: 300 });
+    [523, 659, 784, 1047, 1319].forEach((f, i) =>
+      this._tone(f, t, 0.3, { type: "triangle", gain: 0.24, delay: 0.35 + i * 0.09 }));
+  }
+
+  jcGain() {
+    const ctx = this._ensure(); if (!ctx) return;
+    const t = ctx.currentTime;
+    this._tone(1319, t, 0.08, { type: "square", gain: 0.12 });
+    this._tone(1760, t, 0.12, { type: "square", gain: 0.1, delay: 0.05 });
+  }
 }

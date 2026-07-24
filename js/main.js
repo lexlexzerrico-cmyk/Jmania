@@ -2,18 +2,27 @@
    main.js — app controller: router, input, match lifecycle
    ============================================================ */
 import { loadProfile, saveProfile, applyMatchResult, resetProfile } from "./storage.js";
-import { rankFromIndex, levelProgress } from "./ranks.js";
+import { rankFromIndex, levelProgress, MAX_RANK_INDEX } from "./ranks.js";
 import { ClapEngine } from "./audio.js";
 import { Camera } from "./camera.js";
 import { LobbyMusic } from "./music.js";
 import { Sfx } from "./sfx.js";
 import { Match, makeBot } from "./game.js";
-import { checkAchievements } from "./achievements.js";
+import { checkAchievements, ACHIEVEMENTS } from "./achievements.js";
+import { FxEngine, AURAS, auraById } from "./fx.js";
+import { BOSSES, BossFight } from "./rpg.js";
+import {
+  earnJc, claimDaily, claimPlaytime, dailyInfo, playtimeInfo,
+  buyBoost, buyPremium, grantGems, spendJc, boostActive, BOOST_MS,
+} from "./economy.js";
 import {
   $, $$, toast, renderHud, renderLobby, renderRanks, renderCustomSetup,
   renderMicPanel, renderArena, renderResults, renderAchievements, renderSettings,
-  initParticles, clapBurst,
+  renderShop, renderWorld, renderBossFight, renderBossResults, renderAdmin,
+  initParticles,
 } from "./ui.js";
+
+const ADMIN_CODE = "JERKGOD";
 
 const app = $("#app");
 
@@ -23,7 +32,9 @@ const state = {
   camera: new Camera(),
   music: new LobbyMusic(),
   sfx: new Sfx(),
+  fx: new FxEngine(),
   match: null,
+  bossFight: null,
   inputMode: "mic",     // "mic" | "keyboard"
   micReady: false,
   pending: null,        // pending match config while on mic panel
@@ -47,18 +58,24 @@ function refreshHud() {
 }
 
 function navTo(screen) {
-  // leaving arena? make sure match stops
+  // leaving arena? make sure any fight stops
   if (state.match) { state.match.abort(); state.match = null; }
+  if (state.bossFight) { state.bossFight.abort(); state.bossFight = null; }
   if (state.inputMode === "mic" && state.micReady) { state.clap.stop(); state.micReady = false; }
   detachKeyboard();
 
   switch (screen) {
-    case "lobby":        app.innerHTML = renderLobby(state.profile); break;
+    case "lobby":        app.innerHTML = renderLobby(state.profile); wireLobby(); break;
     case "ranks":        app.innerHTML = renderRanks(state.profile); break;
     case "custom":       app.innerHTML = renderCustomSetup(); wireCustomSetup(); break;
     case "achievements": app.innerHTML = renderAchievements(state.profile); break;
     case "settings":     app.innerHTML = renderSettings(state.profile); wireSettings(); break;
-    default:             app.innerHTML = renderLobby(state.profile);
+    case "shop":         app.innerHTML = renderShop(state.profile); wireShop(); break;
+    case "world":        app.innerHTML = renderWorld(state.profile); break;
+    case "admin":
+      if (!state.profile.adminUnlocked) { navTo("lobby"); return; }
+      app.innerHTML = renderAdmin(state.profile); wireAdmin(); break;
+    default:             app.innerHTML = renderLobby(state.profile); wireLobby();
   }
   refreshHud();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -70,6 +87,10 @@ document.addEventListener("click", (e) => {
   if (nav) { state.sfx.click(); navTo(nav.dataset.nav); return; }
   const play = e.target.closest("[data-play]");
   if (play) { state.sfx.click(); startMode(play.dataset.play); return; }
+  const boss = e.target.closest("[data-boss]");
+  if (boss) { state.sfx.click(); startBoss(+boss.dataset.boss); return; }
+  const retry = e.target.closest("[data-boss-retry]");
+  if (retry) { state.sfx.click(); startBoss(+retry.dataset.bossRetry); return; }
 });
 
 // ---------------------------------------------------------------------------
@@ -191,7 +212,311 @@ function wireSettings() {
     toast("Progress reset — fresh start!", "🧼");
     navTo("lobby");
   });
+
+  $("#admin-access").addEventListener("click", () => {
+    if (state.profile.adminUnlocked) { navTo("admin"); return; }
+    const code = prompt("Developer passcode:");
+    if (code && code.trim().toUpperCase() === ADMIN_CODE) {
+      state.profile.adminUnlocked = true;
+      saveProfile(state.profile);
+      state.sfx.win();
+      toast("Admin access granted 🛠️", "🔓");
+      navTo("admin");
+    } else if (code !== null) {
+      toast("Wrong passcode", "🔒");
+    }
+  });
 }
+
+// ---------------------------------------------------------------------------
+// Lobby wiring (reward claims)
+// ---------------------------------------------------------------------------
+function wireLobby() {
+  const daily = $("#claim-daily");
+  if (daily && !daily.disabled) daily.addEventListener("click", () => {
+    const got = claimDaily(state.profile);
+    if (got) {
+      toast(`Daily reward — +${got} JC`, "📅");
+      state.sfx.jcGain(); state.fx.coinRain(24);
+      navTo("lobby");
+    }
+  });
+  const pt = $("#claim-playtime");
+  if (pt && !pt.disabled) pt.addEventListener("click", () => {
+    const got = claimPlaytime(state.profile);
+    if (got) {
+      toast(`Playtime reward — +${got} JC`, "⏱️");
+      state.sfx.jcGain(); state.fx.coinRain(24);
+      navTo("lobby");
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Shop
+// ---------------------------------------------------------------------------
+function wireShop() {
+  app.addEventListener("click", shopClick);
+  function shopClick(e) {
+    const buy = e.target.closest("[data-buy]");
+    if (buy) {
+      const aura = auraById(buy.dataset.buy);
+      if (aura.tier === "premium" && !state.profile.premium) { toast("Premium required", "★"); return; }
+      if (!spendJc(state.profile, aura.price)) { toast(`Not enough JC — need ${aura.price.toLocaleString()}`, "🪙"); return; }
+      state.profile.ownedAuras.push(aura.id);
+      state.profile.equippedAura = aura.id;
+      saveProfile(state.profile);
+      state.sfx.jcGain(); state.fx.coinRain(16);
+      toast(`${aura.name} unlocked & equipped!`, "🎨");
+      app.removeEventListener("click", shopClick);
+      navTo("shop");
+      return;
+    }
+    const equip = e.target.closest("[data-equip]");
+    if (equip) {
+      state.profile.equippedAura = equip.dataset.equip;
+      saveProfile(state.profile);
+      state.sfx.click();
+      toast(`${auraById(equip.dataset.equip).name} equipped`, "🎨");
+      app.removeEventListener("click", shopClick);
+      navTo("shop");
+      return;
+    }
+  }
+
+  const boostBtn = $("#buy-boost");
+  if (boostBtn) boostBtn.addEventListener("click", () => {
+    if (buyBoost(state.profile)) {
+      toast("2× JC boost active for 20 minutes!", "⚡");
+      state.sfx.levelUp(); navTo("shop");
+    } else toast("Not enough Gems — grab some with Get Gems", "💎");
+  });
+  const premBtn = $("#buy-premium");
+  if (premBtn) premBtn.addEventListener("click", () => {
+    if (buyPremium(state.profile)) {
+      toast("PREMIUM activated — welcome to the club ★", "★");
+      state.sfx.win(); state.fx.coinRain(40); navTo("shop");
+    } else toast("Not enough Gems — grab some with Get Gems", "💎");
+  });
+  const gems = $("#get-gems");
+  if (gems) gems.addEventListener("click", showGemModal);
+}
+
+function showGemModal() {
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.innerHTML = `
+    <div class="modal">
+      <h3>💎 Get Gems</h3>
+      <div class="modal-note">Demo store — this game has no payment backend, so packs are granted instantly and <b>no real money is ever charged</b>.</div>
+      <div class="gem-pack"><span class="gp-name">💎 100 Gems</span><span class="gp-price">would be $0.99</span><button class="btn" data-pack="100">Get</button></div>
+      <div class="gem-pack"><span class="gp-name">💎 550 Gems</span><span class="gp-price">would be $4.99</span><button class="btn" data-pack="550">Get</button></div>
+      <div class="gem-pack"><span class="gp-name">💎 1,200 Gems</span><span class="gp-price">would be $9.99</span><button class="btn" data-pack="1200">Get</button></div>
+      <div class="center mt-24"><button class="btn ghost" id="gem-close">Close</button></div>
+    </div>`;
+  document.body.appendChild(back);
+  back.addEventListener("click", (e) => {
+    if (e.target === back || e.target.closest("#gem-close")) { back.remove(); return; }
+    const pack = e.target.closest("[data-pack]");
+    if (pack) {
+      grantGems(state.profile, +pack.dataset.pack);
+      state.sfx.jcGain();
+      toast(`+${(+pack.dataset.pack).toLocaleString()} Gems (demo)`, "💎");
+      back.remove();
+      navTo("shop");
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// JerkWorld boss fights
+// ---------------------------------------------------------------------------
+function startBoss(index) {
+  const beaten = state.profile.rpgBeaten || 0;
+  if (index > beaten) { toast("Defeat the previous boss first", "🔒"); return; }
+  const boss = BOSSES[index];
+  if (!boss) return;
+  state.pending = { mode: "boss", label: `BOSS · ${boss.name.toUpperCase()}`, boss, bossIndex: index };
+  showMicPanel();
+}
+
+function beginBossFight() {
+  const cfg = state.pending;
+  const boss = cfg.boss;
+  app.innerHTML = renderBossFight(boss, state.profile);
+  refreshHud();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  $("#arena-quit").addEventListener("click", () => {
+    state.sfx.click();
+    if (state.bossFight) state.bossFight.abort();
+    state.bossFight = null;
+    cleanupInputs();
+    navTo("world");
+  });
+
+  runCountdown(() => {
+    const fight = new BossFight(boss, { dmgMult: state.profile.godClap ? 10 : 1 });
+    state.bossFight = fight;
+
+    if (state.inputMode === "mic" && state.micReady) {
+      state._micClap = (e) => fight.registerClap(e.detail.strength || 1);
+      state.clap.addEventListener("clap", state._micClap);
+    } else {
+      attachKeyboard(false, (s) => fight.registerClap(s));
+    }
+
+    wireBossEvents(fight, cfg);
+    fight.start();
+  });
+}
+
+const BOSS_CIRC = 2 * Math.PI * 48;
+
+function wireBossEvents(fight, cfg) {
+  const boss = cfg.boss;
+  const figure = $("#boss-figure");
+  const shield = $("#boss-shield");
+  const hpFill = $("#boss-hp");
+  const hpNum = $("#boss-hp-num");
+  const status = $("#boss-status");
+  const timerText = $("#timer-text");
+  const timerArc = $("#timer-arc");
+  const comboEl = $("#combo-x");
+  const cpsFill = $("#cps-fill");
+  const cpsNow = $("#cps-now");
+  const clapEmoji = $("#clap-emoji");
+  const aura = auraById(state.profile.equippedAura);
+
+  fight.addEventListener("hit", (e) => {
+    const d = e.detail;
+    state.sfx.aura(aura.sfx, d.combo);
+    state.sfx.bossHit();
+    figure.classList.remove("hurt"); void figure.offsetWidth; figure.classList.add("hurt");
+    clapEmoji.classList.remove("pulse"); void clapEmoji.offsetWidth; clapEmoji.classList.add("pulse");
+    comboEl.textContent = "x" + d.mult.toFixed(2);
+    const r = figure.getBoundingClientRect();
+    state.fx.burst(r.left + r.width / 2, r.top + r.height / 2, aura, d.strength, d.combo);
+  });
+
+  fight.addEventListener("blocked", () => {
+    state.sfx.shieldBlock();
+    status.textContent = "🛡️ SHIELDED — wait for the opening!";
+    status.classList.add("warn");
+  });
+
+  fight.addEventListener("shieldup", () => {
+    shield.classList.remove("hidden");
+    status.textContent = "🛡️ SHIELD UP";
+    status.classList.add("warn");
+  });
+  fight.addEventListener("shielddown", () => {
+    shield.classList.add("hidden");
+    status.textContent = "⚔️ OPENING — CLAP NOW!";
+    status.classList.remove("warn");
+  });
+
+  fight.addEventListener("tick", (e) => {
+    const d = e.detail;
+    timerText.textContent = Math.ceil(d.remain);
+    timerArc.style.strokeDasharray = BOSS_CIRC;
+    timerArc.style.strokeDashoffset = BOSS_CIRC * (1 - d.remainPct);
+    hpFill.style.width = (d.pct * 100) + "%";
+    hpFill.classList.toggle("enraged", d.enraged);
+    figure.classList.toggle("enraged", d.enraged);
+    hpNum.textContent = `${Math.ceil(d.hp)} / ${boss.hp}`;
+    cpsFill.style.width = Math.min(100, (d.cps / 10) * 100) + "%";
+    cpsFill.classList.toggle("hot", d.cps >= 6);
+    cpsNow.textContent = d.cps;
+    if (d.remain <= 5 && timerText.dataset.warn !== "1") {
+      timerText.dataset.warn = "1";
+      timerText.style.color = "var(--bad)";
+    }
+  });
+
+  fight.addEventListener("end", (e) => {
+    cleanupInputs();
+    state.bossFight = null;
+    finishBossFight(e.detail, cfg.bossIndex);
+  });
+}
+
+function finishBossFight(r, bossIndex) {
+  let jcReport = null;
+  let xpGained = 0;
+  let isNewKill = false;
+
+  if (r.won) {
+    state.sfx.bossDown();
+    app.classList.add("shake");
+    setTimeout(() => app.classList.remove("shake"), 500);
+    isNewKill = bossIndex === (state.profile.rpgBeaten || 0);
+    if (isNewKill) state.profile.rpgBeaten = bossIndex + 1;
+    // Rematches pay 40% to keep farming honest.
+    const rewardJc = isNewKill ? r.boss.rewardJc : Math.round(r.boss.rewardJc * 0.4);
+    jcReport = earnJc(state.profile, { score: 0, totalClaps: r.totalClaps, won: true }, rewardJc);
+    xpGained = isNewKill ? r.boss.rewardXp : Math.round(r.boss.rewardXp * 0.4);
+    state.profile.xp += xpGained;
+    state.fx.coinRain(30);
+  } else {
+    state.sfx.lose();
+    jcReport = earnJc(state.profile, { score: 0, totalClaps: r.totalClaps, won: false }, 0);
+  }
+  saveProfile(state.profile);
+
+  app.innerHTML = renderBossResults(r, jcReport, xpGained, isNewKill);
+  refreshHud();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ---------------------------------------------------------------------------
+// Admin panel
+// ---------------------------------------------------------------------------
+function wireAdmin() {
+  const p = state.profile;
+  const on = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", () => { fn(); state.sfx.click(); }); };
+  const re = () => { saveProfile(p); navTo("admin"); };
+
+  on("#adm-jc1",   () => { p.jc += 1000; toast("+1,000 JC", "🪙"); re(); });
+  on("#adm-jc10",  () => { p.jc += 10000; toast("+10,000 JC", "💰"); re(); });
+  on("#adm-jc100", () => { p.jc += 100000; toast("+100,000 JC", "🏦"); re(); });
+  on("#adm-gems",  () => { p.gems += 1000; toast("+1,000 Gems", "💎"); re(); });
+  on("#adm-jcdrop", () => { p.jc += 500; saveProfile(p); state.fx.coinRain(80); state.sfx.jcGain(); toast("JC DROP! +500", "🌧️"); refreshHud(); });
+  on("#adm-boost", () => { p.boostUntil = Math.max(Date.now(), p.boostUntil || 0) + BOOST_MS; toast("2× boost +20 min", "⚡"); re(); });
+
+  on("#adm-rankup",   () => { if (p.rankIndex < MAX_RANK_INDEX) p.rankIndex++; toast(`Rank: ${rankFromIndex(p.rankIndex).label}`, "⬆️"); re(); });
+  on("#adm-rankdown", () => { if (p.rankIndex > 0) p.rankIndex--; toast(`Rank: ${rankFromIndex(p.rankIndex).label}`, "⬇️"); re(); });
+  on("#adm-radiant",  () => { p.rankIndex = MAX_RANK_INDEX; p.rr = 100; toast("RADIANT. As you were always meant to be.", "🌟"); re(); });
+  on("#adm-lvl10",    () => { const lp = levelProgress(p.xp); p.xp = xpTarget(lp.level + 10); toast(`Level ${lp.level + 10}`, "⭐"); re(); });
+  on("#adm-ach",      () => { p.achievements = ACHIEVEMENTS.map((a) => a.id); toast("All achievements unlocked", "🏅"); re(); });
+  on("#adm-bosses",   () => { p.rpgBeaten = BOSSES.length; toast("All bosses unlocked/beaten", "🗺️"); re(); });
+
+  on("#adm-auras",   () => { p.ownedAuras = AURAS.map((a) => a.id); toast("Every aura unlocked", "🎨"); re(); });
+  on("#adm-dev",     () => { if (!p.ownedAuras.includes("dev")) p.ownedAuras.push("dev"); p.equippedAura = "dev"; toast("Developer Aura equipped", "👨‍💻"); re(); });
+  on("#adm-susanoo", () => { if (!p.ownedAuras.includes("susanoo")) p.ownedAuras.push("susanoo"); p.equippedAura = "susanoo"; state.fx.guardianFlash(); toast("Spectral Guardian equipped", "👹"); re(); });
+  on("#adm-guardian", () => { state.fx.guardianFlash(); state.sfx.aura("boom"); });
+  on("#adm-burst",   () => { const a = auraById(p.equippedAura); state.fx.burst(innerWidth / 2, innerHeight / 2, a, 1, 20); state.sfx.aura(a.sfx, 20); });
+  on("#adm-premium", () => { p.premium = !p.premium; toast(p.premium ? "Premium granted" : "Premium revoked", "★"); re(); });
+
+  on("#adm-god",      () => { p.godClap = !p.godClap; toast(`God Clap ${p.godClap ? "ON — 10× boss damage" : "OFF"}`, "🙏"); re(); });
+  on("#adm-daily",    () => { p.lastDaily = null; toast("Daily reward reset — claim it in the lobby", "📅"); re(); });
+  on("#adm-playtime", () => { p.playSeconds = (p.playSeconds || 0) + 600; toast("+10 min playtime credited", "⏱️"); re(); });
+  on("#adm-history",  () => { p.history = []; toast("History cleared", "🧹"); re(); });
+  on("#adm-hype",     () => { toast("GODLIKE 👑", "🔥"); state.sfx.unlock(); });
+  on("#adm-reset",    () => {
+    if (!confirm("FULL RESET — wipe rank, level, JC, gems, auras, bosses, everything?")) return;
+    state.profile = resetProfile();
+    state.clap.setSensitivity(state.profile.settings.sensitivity);
+    state.sfx.setEnabled(state.profile.settings.sfxOn);
+    applyTheme(state.profile.settings.theme);
+    toast("Everything wiped. Clean slate.", "💣");
+    navTo("lobby");
+  });
+  on("#adm-lock", () => { p.adminUnlocked = false; saveProfile(p); toast("Admin panel locked", "🔒"); navTo("lobby"); });
+}
+
+// xp needed to *be* a given level (mirror of ranks.xpForLevel)
+function xpTarget(level) { return Math.round(120 * Math.pow(level - 1, 1.55)); }
 
 // ---------------------------------------------------------------------------
 // Mic panel / calibration
@@ -224,17 +549,17 @@ function showMicPanel() {
       state.clap.addEventListener("level", onLevel);
       state.clap.addEventListener("clap", onTestClap, { once: false });
       $("#mic-enable").textContent = "✓ Mic live — starting…";
-      setTimeout(() => beginMatch(), 900);
+      setTimeout(() => startPending(), 900);
     } catch (err) {
       toast("Mic unavailable — switching to keyboard mode", "⌨️");
       state.inputMode = "keyboard";
-      beginMatch();
+      startPending();
     }
   });
 
   $("#mic-keyboard").addEventListener("click", () => {
     state.inputMode = "keyboard";
-    beginMatch();
+    startPending();
   });
 
   const camPanelBtn = $("#mic-cam");
@@ -243,24 +568,26 @@ function showMicPanel() {
 }
 
 // ---------------------------------------------------------------------------
-// Keyboard / tap input
+// Keyboard / touch input
 // ---------------------------------------------------------------------------
-function attachKeyboard() {
+// Mouse clicks NEVER register claps (anti-autoclicker). Space is the
+// no-mic fallback; touch taps count only where allowed (casual modes).
+function attachKeyboard(allowTouch = false, clapFn = doClap) {
   detachKeyboard();
   const handler = (e) => {
-    if (e.type === "keydown") {
-      if (e.repeat) return;
-      if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); doClap(1); }
-    }
+    if (e.repeat) return;
+    if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); clapFn(1); }
   };
   state.keyHandler = handler;
   window.addEventListener("keydown", handler);
-  // Tap/click on the stage
-  state.tapHandler = (e) => {
-    if (e.target.closest("#arena-quit")) return;
-    if (e.target.closest(".clap-stage") || e.target.closest(".arena")) doClap(1);
-  };
-  app.addEventListener("pointerdown", state.tapHandler);
+  if (allowTouch) {
+    state.tapHandler = (e) => {
+      if (e.pointerType === "mouse") return;   // clicking doesn't count
+      if (e.target.closest("#arena-quit")) return;
+      if (e.target.closest(".clap-stage") || e.target.closest(".arena")) clapFn(1);
+    };
+    app.addEventListener("pointerdown", state.tapHandler);
+  }
 }
 function detachKeyboard() {
   if (state.keyHandler) window.removeEventListener("keydown", state.keyHandler);
@@ -270,6 +597,17 @@ function detachKeyboard() {
 
 function doClap(strength) {
   if (state.match && state.match.running) state.match.registerClap(strength);
+}
+
+// Casual modes may tap-to-clap on touchscreens; competitive is mic/Space only.
+function touchAllowed(cfg) {
+  return ["practice", "classic", "custom"].includes(cfg.mode);
+}
+
+// Route the pending config to the right game type.
+function startPending() {
+  if (state.pending && state.pending.mode === "boss") beginBossFight();
+  else beginMatch();
 }
 
 // ---------------------------------------------------------------------------
@@ -303,7 +641,7 @@ function beginMatch() {
       state._micClap = (e) => doClap(e.detail.strength || 1);
       state.clap.addEventListener("clap", state._micClap);
     } else {
-      attachKeyboard();
+      attachKeyboard(touchAllowed(cfg));
     }
 
     wireMatchEvents(match, cfg);
@@ -359,9 +697,11 @@ function wireMatchEvents(match, cfg) {
   ];
   let hypeIdx = 0;
 
+  const aura = auraById(state.profile.equippedAura);
+
   match.addEventListener("clap", (e) => {
     const { score, mult, strength, combo } = e.detail;
-    state.sfx.clap(combo);
+    state.sfx.aura(aura.sfx, combo);
     while (hypeIdx < hypeStops.length && combo >= hypeStops[hypeIdx].c) {
       showHype(hypeStops[hypeIdx].t);
       hypeIdx++;
@@ -371,16 +711,25 @@ function wireMatchEvents(match, cfg) {
       scoreEl.classList.add("bump");
       setTimeout(() => scoreEl.classList.remove("bump"), 90);
     }
-    comboEl.textContent = "x" + mult.toFixed(1);
+    comboEl.textContent = "x" + mult.toFixed(2);
     comboEl.classList.add("bump");
     setTimeout(() => comboEl.classList.remove("bump"), 100);
     clapEmoji.classList.remove("pulse"); void clapEmoji.offsetWidth; clapEmoji.classList.add("pulse");
-    clapBurst(strength);
+    const rect = clapEmoji.getBoundingClientRect();
+    state.fx.burst(rect.left + rect.width / 2, rect.top + rect.height / 2, aura, strength, combo);
     if (state.camera.on) {
       camWindow.classList.add("pulse");
       clearTimeout(state._camPulse);
       state._camPulse = setTimeout(() => camWindow.classList.remove("pulse"), 130);
     }
+  });
+
+  let susWarned = false;
+  match.addEventListener("sus", () => {
+    if (susWarned) return;
+    susWarned = true;
+    toast("Whoa — inputs faster than humanly possible are ignored 🤨", "🚫");
+    setTimeout(() => { susWarned = false; }, 4000);
   });
 
   // 1v1 tug-of-war bar updates
@@ -466,6 +815,10 @@ function finishMatch(result) {
 
   const report = applyMatchResult(state.profile, result);
 
+  // Jerk Coins for completing the game (boost/premium multipliers apply).
+  const jcReport = earnJc(state.profile, result);
+  if (result.won) { state.sfx.jcGain(); state.fx.coinRain(Math.min(40, 10 + Math.round(jcReport.total / 20))); }
+
   // Evaluate achievement unlocks against the freshly-updated profile.
   const fresh = checkAchievements(state.profile, {
     profile: state.profile,
@@ -482,7 +835,7 @@ function finishMatch(result) {
     state.sfx.win();
   }
 
-  app.innerHTML = renderResults(result, report, snapshot);
+  app.innerHTML = renderResults(result, report, snapshot, jcReport);
   refreshHud();
   window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -592,6 +945,17 @@ function primeMusic(e) {
 }
 window.addEventListener("pointerdown", primeMusic);
 window.addEventListener("keydown", primeMusic);
+
+// ---------------------------------------------------------------------------
+// Playtime tracker (feeds the playtime reward)
+// ---------------------------------------------------------------------------
+let _ptDirty = 0;
+setInterval(() => {
+  if (document.visibilityState !== "visible") return;
+  state.profile.playSeconds = (state.profile.playSeconds || 0) + 5;
+  _ptDirty += 5;
+  if (_ptDirty >= 30) { saveProfile(state.profile); _ptDirty = 0; }
+}, 5000);
 
 // ---------------------------------------------------------------------------
 // Boot

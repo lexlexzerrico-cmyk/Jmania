@@ -71,6 +71,28 @@ Any static host works too (GitHub Pages, Netlify, Vercel, `npx serve`, …).
 - **Polished UI** — glassmorphism, animated gradient background, particle field,
   clap bursts, countdown, timer ring, and reward animations.
 
+## 🆕 v2 — Economy, JerkWorld & Admin
+
+- **Harder scoring** — the combo multiplier now caps at **×2** with a slow
+  20-clap ramp. Autoclickers are ignored (>16 claps/sec is discarded) and
+  **mouse clicks never count** — mic claps, Space, or touch-taps (casual modes
+  only) are the only inputs.
+- **Jerk Coins (JC)** — earned from every completed game, daily login rewards
+  (with streaks) and playtime rewards (50 JC / 10 min).
+- **Shop** — 10+ auras (Ember, Frostbite, Thunderlord, Void Walker, …) that
+  change your clap particles *and* clap sound. Gem store with a **2× JC boost**
+  (20 min) and **Premium** (+50% JC, exclusive Galaxy aura). Gems are a demo
+  currency — no real payments.
+- **JerkWorld (RPG boss rush)** — 8 bosses from **Jerkling** to **OMEGA
+  JERKGOD** (incl. **Jerkmaster**). Claps deal damage; bosses regenerate,
+  shield on a cycle, and enrage below 25% HP.
+- **Admin panel** — passcode-gated developer panel with 20+ tools: currency
+  grants, JC drop, rank/level setters, unlock-alls, god clap, and two exclusive
+  auras (Developer matrix-glyphs and the **Spectral Guardian** — a giant spirit
+  warrior that flares up on big combos).
+- **Optimized FX** — all clap/coin/guardian effects render through one pooled
+  canvas engine that sleeps when idle.
+
 ## 🗂️ Structure
 
 ```

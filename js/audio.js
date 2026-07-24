@@ -22,9 +22,9 @@ export class ClapEngine extends EventTarget {
     this.freqBuf = null;
     this.noiseFloor = 0.004;   // adaptive background energy
     this.lastClapAt = 0;
-    this.refractoryMs = 90;    // min gap between counted claps
+    this.refractoryMs = 70;    // min gap between counted claps (fast hands ok)
     this.armed = true;         // must fall below floor before next onset
-    this.sensitivity = 0.5;    // 0..1 (higher = easier to trigger)
+    this.sensitivity = 0.65;   // 0..1 (higher = easier to trigger)
 
     this.level = 0;            // smoothed level for meters (0..1)
     this.supported = typeof navigator !== "undefined" &&
@@ -61,6 +61,11 @@ export class ClapEngine extends EventTarget {
 
     this.running = true;
     this.noiseFloor = 0.004;
+    // Browsers suspend AudioContexts on tab switches — resume automatically.
+    this._visHandler = () => {
+      if (this.ctx && this.ctx.state === "suspended") this.ctx.resume().catch(() => {});
+    };
+    document.addEventListener("visibilitychange", this._visHandler);
     this._loop();
   }
 
@@ -68,6 +73,7 @@ export class ClapEngine extends EventTarget {
     this.running = false;
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = null;
+    if (this._visHandler) { document.removeEventListener("visibilitychange", this._visHandler); this._visHandler = null; }
     if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
     if (this.ctx) this.ctx.close().catch(() => {});
     this.ctx = this.analyser = this.stream = this.source = null;
@@ -106,18 +112,21 @@ export class ClapEngine extends EventTarget {
     this.level += (Math.min(1, rms * 6) - this.level) * 0.3;
     this.dispatchEvent(new CustomEvent("level", { detail: { level: this.level, rms } }));
 
-    // Adaptive noise floor tracks quiet background, rises slowly, falls slowly.
-    if (rms < this.noiseFloor * 1.5) {
-      this.noiseFloor += (rms - this.noiseFloor) * 0.05;
+    // Adaptive noise floor tracks quiet background; adapts a bit faster so a
+    // noisy room stops causing false triggers within a couple of seconds.
+    if (rms < this.noiseFloor * 1.6) {
+      this.noiseFloor += (rms - this.noiseFloor) * 0.08;
     }
-    this.noiseFloor = Math.max(0.0015, this.noiseFloor);
+    this.noiseFloor = Math.max(0.0012, this.noiseFloor);
 
     // Threshold scales with sensitivity: high sens => lower multiplier.
-    const mult = 3.6 - this.sensitivity * 2.2;          // 3.6 .. 1.4
-    const absFloor = 0.02 - this.sensitivity * 0.014;   // 0.02 .. 0.006
+    const mult = 3.2 - this.sensitivity * 2.0;          // 3.2 .. 1.2
+    const absFloor = 0.016 - this.sensitivity * 0.012;  // 0.016 .. 0.004
     const threshold = Math.max(absFloor, this.noiseFloor * mult);
 
-    const isTransient = rms > threshold && hfRatio > 0.28;
+    // Claps are broadband transients; the HF requirement is looser now so
+    // softer/cupped claps still register.
+    const isTransient = rms > threshold && hfRatio > 0.22;
 
     if (isTransient && this.armed && now - this.lastClapAt > this.refractoryMs) {
       this.lastClapAt = now;
@@ -126,8 +135,8 @@ export class ClapEngine extends EventTarget {
       this.dispatchEvent(new CustomEvent("clap", { detail: { t: now, strength } }));
     }
 
-    // Re-arm once signal drops back near the floor.
-    if (rms < threshold * 0.6) this.armed = true;
+    // Re-arm quickly once the transient decays so rapid claps all count.
+    if (rms < threshold * 0.7) this.armed = true;
 
     this.raf = requestAnimationFrame(() => this._loop());
   }

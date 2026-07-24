@@ -20,6 +20,22 @@ const DEFAULT_PROFILE = {
   },
   achievements: [],
   history: [],
+  // Economy
+  jc: 0,
+  gems: 0,
+  premium: false,
+  boostUntil: 0,
+  lastDaily: null,
+  dailyStreak: 0,
+  playSeconds: 0,
+  playClaimedSeconds: 0,
+  ownedAuras: ["none"],
+  equippedAura: "none",
+  // RPG
+  rpgBeaten: 0,          // how many bosses defeated (index of next unlocked)
+  // Admin
+  adminUnlocked: false,
+  godClap: false,        // admin: 10x boss damage
   settings: {
     sensitivity: 0.5,   // 0..1
     musicOn: true,
@@ -43,6 +59,7 @@ export function loadProfile() {
       settings: { ...DEFAULT_PROFILE.settings, ...(p.settings || {}) },
       achievements: Array.isArray(p.achievements) ? p.achievements : [],
       history: Array.isArray(p.history) ? p.history : [],
+      ownedAuras: Array.isArray(p.ownedAuras) && p.ownedAuras.length ? p.ownedAuras : ["none"],
     };
   } catch {
     return structuredClone(DEFAULT_PROFILE);

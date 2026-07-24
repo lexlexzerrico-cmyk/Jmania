@@ -14,9 +14,15 @@
    ============================================================ */
 
 export const BASE_POINTS = 10;
-const FAST_GAP_MS = 250;     // clap gaps under this build combo (>4 cps)
-const COMBO_DECAY_MS = 700;  // no clap for this long => combo cools down
-const MAX_MULT = 6;
+const FAST_GAP_MS = 250;      // clap gaps under this build combo (>4 cps)
+const COMBO_DECAY_MS = 700;   // no clap for this long => combo cools down
+export const MAX_MULT = 2;    // hard cap — earn every point
+export const MULT_STEP = 0.05; // slow ramp: 20-clap combo to reach x2
+const MAX_LEGIT_CPS = 16;     // anti-autoclicker: humans top out around here
+
+export function comboToMult(combo) {
+  return Math.min(MAX_MULT, 1 + combo * MULT_STEP);
+}
 
 // --- Clash (tug-of-war) tuning ---
 const BASE_PUSH = 1.35;      // bar units shoved per clap at base strength
@@ -78,6 +84,13 @@ export class Match extends EventTarget {
   registerClap(strength = 1) {
     if (!this.running) return;
     const now = performance.now();
+
+    // Anti-autoclicker: inputs beyond a humanly-possible rate are ignored.
+    if (this._cps(now) >= MAX_LEGIT_CPS) {
+      this.dispatchEvent(new CustomEvent("sus", { detail: { cps: this._cps(now) } }));
+      return;
+    }
+
     const gap = this.lastClapAt ? now - this.lastClapAt : 9999;
     this.lastClapAt = now;
 
@@ -86,7 +99,7 @@ export class Match extends EventTarget {
     else if (gap < COMBO_DECAY_MS) this.combo = Math.max(0, this.combo - 1);
     else this.combo = 0;
 
-    this.mult = Math.min(MAX_MULT, 1 + this.combo * 0.2);
+    this.mult = comboToMult(this.combo);
 
     const pts = Math.round(BASE_POINTS * this.mult * (0.65 + strength * 0.35));
     this.score += pts;
@@ -134,7 +147,7 @@ export class Match extends EventTarget {
       // decay gradually
       if (now - this.lastClapAt > COMBO_DECAY_MS + 250) {
         this.combo = Math.max(0, this.combo - 1);
-        this.mult = Math.min(MAX_MULT, 1 + this.combo * 0.2);
+        this.mult = comboToMult(this.combo);
         this.lastClapAt = now - COMBO_DECAY_MS; // stagger decay
       }
     }
@@ -183,7 +196,7 @@ export class Match extends EventTarget {
     this.botClaps += 1;
     this.botClapTimes.push(now);
     this._botCombo += 1;
-    const mult = Math.min(MAX_MULT, 1 + this._botCombo * 0.2);
+    const mult = comboToMult(this._botCombo);
     this.botScore += Math.round(BASE_POINTS * mult * 0.9);
 
     // 1v1 clash: bot shoves the bar back toward the player.

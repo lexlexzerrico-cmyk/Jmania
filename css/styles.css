@@ -3,7 +3,7 @@
    Design system + screens
    ============================================================ */
 
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Chakra+Petch:wght@600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Russo+One&family=Exo+2:wght@400;500;600;700&display=swap");
 
 :root {
   /* Palette */
@@ -45,7 +45,8 @@
   --shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.75);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --font: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font: "Exo 2", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Russo One", "Arial Black", Impact, system-ui, sans-serif;
 }
 
 /* ===== Themes ===== */
@@ -120,7 +121,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
   user-select: none; -webkit-user-select: none;
 }
 
-.display { font-family: "Chakra Petch", var(--font); letter-spacing: 0.5px; }
+.display { font-family: var(--font-display); letter-spacing: 0.5px; }
 
 /* ============================================================
    Animated background
@@ -167,7 +168,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 .brand:hover { transform: translateY(-1px); }
 .brand-mark { font-size: 26px; filter: drop-shadow(0 0 10px rgba(177,77,255,0.6)); animation: clapWiggle 3.5s ease-in-out infinite; }
 @keyframes clapWiggle { 0%,92%,100%{transform:rotate(0)} 94%{transform:rotate(-16deg)} 96%{transform:rotate(14deg)} 98%{transform:rotate(-8deg)} }
-.brand-name { font-family: "Chakra Petch"; font-weight: 700; font-size: 22px; letter-spacing: 1px; }
+.brand-name { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: 1px; }
 .brand-name .accent { background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 .profile-hud { display: flex; align-items: center; gap: 14px; }
@@ -179,7 +180,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 }
 .hud-level .lvl-badge {
   width: 38px; height: 38px; display: grid; place-items: center;
-  border-radius: 50%; font-weight: 700; font-family: "Chakra Petch";
+  border-radius: 50%; font-weight: 700; font-family: var(--font-display);
   background: var(--grad-hot); box-shadow: var(--glow-accent); font-size: 15px;
 }
 .hud-level .lvl-meta { display: flex; flex-direction: column; line-height: 1.1; }
@@ -213,7 +214,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 @keyframes screenIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
 .section-title { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
-.section-title h2 { font-family: "Chakra Petch"; font-size: clamp(22px, 3vw, 30px); font-weight: 700; }
+.section-title h2 { font-family: var(--font-display); font-size: clamp(22px, 3vw, 30px); font-weight: 700; }
 .section-title .sub { color: var(--text-faint); font-size: 14px; }
 
 /* ============================================================
@@ -253,7 +254,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
   background: radial-gradient(500px 200px at 10% 120%, rgba(34,224,214,0.16), transparent 60%);
 }
 .hero .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--accent-3); background: rgba(34,224,214,0.1); border: 1px solid rgba(34,224,214,0.25); padding: 6px 12px; border-radius: 999px; margin-bottom: 18px; }
-.hero h1 { font-family: "Chakra Petch"; font-size: clamp(34px, 7vw, 62px); line-height: 1; font-weight: 700; margin-bottom: 14px; }
+.hero h1 { font-family: var(--font-display); font-size: clamp(34px, 7vw, 62px); line-height: 1; font-weight: 700; margin-bottom: 14px; }
 .hero h1 .g { background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero p.lead { color: var(--text-dim); font-size: clamp(15px, 2vw, 18px); max-width: 560px; margin-bottom: 26px; }
 .hero .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; }
@@ -274,7 +275,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 .mode-card:hover::before { opacity: 1; }
 .mode-card .mc-icon { font-size: 30px; margin-bottom: 12px; }
 .mode-card .mc-tag { position: absolute; top: 16px; right: 16px; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-faint); border: 1px solid var(--stroke); padding: 3px 8px; border-radius: 999px; }
-.mode-card h3 { font-family: "Chakra Petch"; font-size: 21px; margin-bottom: 6px; }
+.mode-card h3 { font-family: var(--font-display); font-size: 21px; margin-bottom: 6px; }
 .mode-card p { color: var(--text-dim); font-size: 13.5px; line-height: 1.5; flex: 1; }
 .mode-card .mc-go { margin-top: 12px; font-size: 13px; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 6px; }
 .mode-card .mc-go .arrow { transition: transform 0.2s; }
@@ -290,7 +291,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 .mh-list { display: grid; gap: 8px; }
 .mh-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(8px); }
 .mh-row .mh-ic { font-size: 18px; }
-.mh-row .mh-mode { font-family: "Chakra Petch"; font-weight: 700; font-size: 14px; min-width: 74px; }
+.mh-row .mh-mode { font-family: var(--font-display); font-weight: 700; font-size: 14px; min-width: 74px; }
 .mh-row .mh-detail { color: var(--text-dim); font-size: 13px; }
 .mh-outcome { font-weight: 700; }
 .mh-outcome.win { color: var(--good); }
@@ -303,7 +304,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 .ach-card.got:hover { transform: translateY(-3px); }
 .ach-card.locked { opacity: 0.55; filter: grayscale(0.5); }
 .ach-card .ach-ic { font-size: 30px; width: 44px; text-align: center; }
-.ach-card .ach-name { font-family: "Chakra Petch"; font-weight: 700; font-size: 15px; }
+.ach-card .ach-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
 .ach-card .ach-desc { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
 .ach-card .ach-check { position: absolute; top: 12px; right: 14px; color: var(--good); font-weight: 700; }
 
@@ -337,7 +338,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 .hero-av { display: inline-block; font-size: 0.9em; filter: drop-shadow(0 0 12px rgba(0,0,0,0.4)); }
 
 /* In-match hype callouts */
-.hype { position: absolute; left: 50%; top: 26%; transform: translate(-50%, -50%); z-index: 8; pointer-events: none; font-family: "Chakra Petch"; font-weight: 700; font-size: clamp(28px, 7vw, 54px); letter-spacing: 1px; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 30px rgba(255,61,127,0.4); animation: hypePop 0.9s var(--ease) forwards; }
+.hype { position: absolute; left: 50%; top: 26%; transform: translate(-50%, -50%); z-index: 8; pointer-events: none; font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 7vw, 54px); letter-spacing: 1px; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 30px rgba(255,61,127,0.4); animation: hypePop 0.9s var(--ease) forwards; }
 @keyframes hypePop { 0% { transform: translate(-50%,-50%) scale(0.4) rotate(-6deg); opacity: 0; } 25% { transform: translate(-50%,-50%) scale(1.15); opacity: 1; } 70% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 100% { transform: translate(-50%,-90%) scale(0.9); opacity: 0; } }
 
 /* Screen shake */
@@ -357,7 +358,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 /* Stats strip */
 .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-top: 30px; }
 .stat-box { padding: 18px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); text-align: center; backdrop-filter: blur(10px); }
-.stat-box .v { font-family: "Chakra Petch"; font-size: 28px; font-weight: 700; background: var(--grad-cyan); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stat-box .v { font-family: var(--font-display); font-size: 28px; font-weight: 700; background: var(--grad-cyan); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .stat-box .l { font-size: 12px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
 
 /* ============================================================
@@ -365,11 +366,11 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
    ============================================================ */
 .arena { text-align: center; }
 .arena-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-.arena-top .mode-badge { font-family: "Chakra Petch"; font-size: 14px; letter-spacing: 1px; padding: 8px 16px; border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke-strong); }
+.arena-top .mode-badge { font-family: var(--font-display); font-size: 14px; letter-spacing: 1px; padding: 8px 16px; border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke-strong); }
 
 .timer-ring { position: relative; width: 108px; height: 108px; }
 .timer-ring svg { transform: rotate(-90deg); }
-.timer-ring .t-text { position: absolute; inset: 0; display: grid; place-items: center; font-family: "Chakra Petch"; font-size: 30px; font-weight: 700; }
+.timer-ring .t-text { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 30px; font-weight: 700; }
 
 .clap-stage {
   position: relative; margin: 10px auto 6px; max-width: 640px;
@@ -381,13 +382,13 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 .clap-emoji.pulse { animation: clapHit 0.18s var(--ease); }
 @keyframes clapHit { 0%{transform:scale(1)} 40%{transform:scale(1.35) rotate(-6deg)} 100%{transform:scale(1)} }
 
-.score-huge { font-family: "Chakra Petch"; font-size: clamp(48px, 12vw, 92px); font-weight: 700; line-height: 1; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; transition: transform 0.08s; }
+.score-huge { font-family: var(--font-display); font-size: clamp(48px, 12vw, 92px); font-weight: 700; line-height: 1; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; transition: transform 0.08s; }
 .score-huge.bump { transform: scale(1.08); }
 .score-label { color: var(--text-faint); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
 
 .combo-wrap { margin: 16px auto 0; max-width: 420px; }
 .combo-line { display: flex; align-items: baseline; justify-content: center; gap: 10px; }
-.combo-x { font-family: "Chakra Petch"; font-size: 34px; font-weight: 700; color: var(--gold); text-shadow: 0 0 18px rgba(255,208,90,0.5); transition: transform 0.1s; }
+.combo-x { font-family: var(--font-display); font-size: 34px; font-weight: 700; color: var(--gold); text-shadow: 0 0 18px rgba(255,208,90,0.5); transition: transform 0.1s; }
 .combo-x.bump { transform: scale(1.2); }
 .combo-txt { font-size: 13px; color: var(--text-dim); letter-spacing: 1px; }
 
@@ -397,7 +398,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 .cps-fill { height: 100%; width: 0%; border-radius: 999px; background: var(--grad-cyan); transition: width 0.12s linear; box-shadow: 0 0 16px rgba(34,224,214,0.5); }
 .cps-fill.hot { background: var(--grad-hot); box-shadow: 0 0 20px rgba(255,61,127,0.6); }
 .cps-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-faint); margin-top: 8px; }
-.cps-now { font-family: "Chakra Petch"; font-size: 20px; color: var(--accent-3); }
+.cps-now { font-family: var(--font-display); font-size: 20px; color: var(--accent-3); }
 
 /* ============================================================
    1v1 Clash bar (tug-of-war with lightning divider)
@@ -407,9 +408,9 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 .clash-head { display: flex; align-items: center; gap: 10px; }
 .clash-head.foe { flex-direction: row-reverse; text-align: right; }
 .clash-head .ch-av { font-size: 30px; line-height: 1; filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); }
-.clash-head .ch-name { font-family: "Chakra Petch"; font-size: 16px; font-weight: 700; }
+.clash-head .ch-name { font-family: var(--font-display); font-size: 16px; font-weight: 700; }
 .clash-head .ch-cps { font-size: 12px; color: var(--text-faint); }
-.clash-head .ch-cps b { font-family: "Chakra Petch"; color: var(--accent-3); font-size: 15px; }
+.clash-head .ch-cps b { font-family: var(--font-display); color: var(--accent-3); font-size: 15px; }
 .clash-head.foe .ch-cps b { color: var(--accent-2); }
 
 .clash-bar {
@@ -437,7 +438,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 @keyframes clashStripes { to { background-position: 60px 0; } }
 
 .clash-fill .cf-king { font-size: clamp(38px, 9vw, 58px); line-height: 1; position: relative; z-index: 2; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5)); }
-.clash-fill .cf-pct { position: absolute; z-index: 2; font-family: "Chakra Petch"; font-weight: 700; font-size: 26px; color: rgba(255,255,255,0.92); text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+.clash-fill .cf-pct { position: absolute; z-index: 2; font-family: var(--font-display); font-weight: 700; font-size: 26px; color: rgba(255,255,255,0.92); text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
 .clash-fill.you .cf-pct { left: 76px; }
 .clash-fill.foe .cf-pct { right: 76px; }
 
@@ -462,20 +463,20 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 
 /* Knockout flash overlay */
 .ko-flash { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: radial-gradient(circle, rgba(255,255,255,0.25), rgba(6,3,14,0.9)); animation: koFade 1.1s var(--ease) forwards; }
-.ko-flash .ko-text { font-family: "Chakra Petch"; font-weight: 700; font-size: clamp(48px, 14vw, 130px); background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; animation: koPop 1.1s var(--ease); }
+.ko-flash .ko-text { font-family: var(--font-display); font-weight: 700; font-size: clamp(48px, 14vw, 130px); background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; animation: koPop 1.1s var(--ease); }
 @keyframes koPop { 0%{transform:scale(0.3) rotate(-8deg);opacity:0} 25%{transform:scale(1.1);opacity:1} 60%{transform:scale(1)} 100%{transform:scale(1.3);opacity:0} }
 @keyframes koFade { 0%{opacity:1} 100%{opacity:0} }
 
 /* Countdown overlay */
 .countdown { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(6,3,14,0.82); backdrop-filter: blur(6px); }
-.countdown .cd-num { font-family: "Chakra Petch"; font-size: clamp(90px, 30vw, 220px); font-weight: 700; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; animation: cdPop 0.9s var(--ease); }
+.countdown .cd-num { font-family: var(--font-display); font-size: clamp(90px, 30vw, 220px); font-weight: 700; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; animation: cdPop 0.9s var(--ease); }
 @keyframes cdPop { 0%{transform:scale(0.4);opacity:0} 30%{transform:scale(1.1);opacity:1} 70%{transform:scale(1)} 100%{transform:scale(1.4);opacity:0} }
 .countdown .cd-hint { position: absolute; bottom: 14%; color: var(--text-dim); font-size: 15px; }
 
 /* Mic permission / calibration panel */
 .mic-panel { max-width: 520px; margin: 0 auto; text-align: center; padding: 34px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(14px); }
 .mic-panel .mic-icon { font-size: 54px; margin-bottom: 14px; filter: drop-shadow(0 0 18px rgba(34,224,214,0.5)); }
-.mic-panel h3 { font-family: "Chakra Petch"; font-size: 24px; margin-bottom: 10px; }
+.mic-panel h3 { font-family: var(--font-display); font-size: 24px; margin-bottom: 10px; }
 .mic-panel p { color: var(--text-dim); font-size: 14.5px; line-height: 1.6; margin-bottom: 20px; }
 .mic-level { height: 12px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; margin: 16px 0; border: 1px solid var(--stroke); }
 .mic-level > i { display: block; height: 100%; width: 0%; background: var(--grad-cyan); border-radius: 999px; transition: width 0.06s; }
@@ -491,13 +492,13 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
    ============================================================ */
 .results { max-width: 640px; margin: 0 auto; text-align: center; }
 .results .res-card { padding: 36px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(14px); box-shadow: var(--shadow); }
-.res-verdict { font-family: "Chakra Petch"; font-size: clamp(30px, 6vw, 46px); font-weight: 700; margin-bottom: 6px; }
+.res-verdict { font-family: var(--font-display); font-size: clamp(30px, 6vw, 46px); font-weight: 700; margin-bottom: 6px; }
 .res-verdict.win { background: var(--grad-cyan); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .res-verdict.loss { color: var(--bad); }
-.res-score { font-family: "Chakra Petch"; font-size: clamp(56px, 14vw, 96px); font-weight: 700; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1; margin: 6px 0 18px; }
+.res-score { font-family: var(--font-display); font-size: clamp(56px, 14vw, 96px); font-weight: 700; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1; margin: 6px 0 18px; }
 .res-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
 .res-grid .rb { padding: 14px; border-radius: var(--r-md); background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); }
-.res-grid .rb .v { font-family: "Chakra Petch"; font-size: 24px; font-weight: 700; }
+.res-grid .rb .v { font-family: var(--font-display); font-size: 24px; font-weight: 700; }
 .res-grid .rb .l { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
 
 .reward-row { display: grid; gap: 12px; margin: 8px 0 22px; }
@@ -513,7 +514,7 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .reward .r-bar > i { display: block; height: 100%; border-radius: 999px; width: 0%; transition: width 0.9s var(--ease); }
 .reward.xp .r-bar > i { background: var(--grad-hot); }
 .reward.rr .r-bar > i { background: var(--grad-cyan); }
-.reward .r-delta { font-family: "Chakra Petch"; font-weight: 700; font-size: 18px; }
+.reward .r-delta { font-family: var(--font-display); font-weight: 700; font-size: 18px; }
 .reward .r-delta.up { color: var(--good); }
 .reward .r-delta.down { color: var(--bad); }
 
@@ -527,7 +528,7 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .rank-row .rr-emblem { width: 40px; justify-content: center; }
 .reward .r-ic .rank-svg { vertical-align: middle; }
 .rank-hero .rh-info { flex: 1; min-width: 220px; }
-.rank-hero .rh-tier { font-family: "Chakra Petch"; font-size: 32px; font-weight: 700; }
+.rank-hero .rh-tier { font-family: var(--font-display); font-size: 32px; font-weight: 700; }
 .rank-hero .rh-rr-track { height: 14px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid var(--stroke); overflow: hidden; margin: 12px 0 6px; }
 .rank-hero .rh-rr-track > i { display: block; height: 100%; border-radius: 999px; background: var(--grad-cyan); width: 0%; }
 .rank-hero .rh-rr-num { font-size: 13px; color: var(--text-dim); }
@@ -536,7 +537,7 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .rank-row { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); transition: transform 0.2s, border-color 0.2s; }
 .rank-row.current { border-color: var(--stroke-strong); box-shadow: var(--glow-accent); transform: scale(1.01); }
 .rank-row .rr-emblem { font-size: 30px; }
-.rank-row .rr-name { font-family: "Chakra Petch"; font-size: 17px; flex: 1; }
+.rank-row .rr-name { font-family: var(--font-display); font-size: 17px; flex: 1; }
 .rank-row .rr-band { font-size: 12px; color: var(--text-faint); }
 
 /* ============================================================
@@ -550,7 +551,7 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .chip { padding: 10px 18px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); cursor: pointer; font-size: 14px; transition: all 0.18s; }
 .chip:hover { border-color: var(--stroke-strong); }
 .chip.active { background: var(--grad-hot); border-color: transparent; font-weight: 600; box-shadow: 0 8px 20px -8px rgba(177,77,255,0.7); }
-.field .val-read { font-family: "Chakra Petch"; font-size: 22px; color: var(--accent-3); }
+.field .val-read { font-family: var(--font-display); font-size: 22px; color: var(--accent-3); }
 
 /* ============================================================
    Toasts
@@ -576,13 +577,13 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .cam-window video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; background: #0b0716; }
 .cam-window .cam-badge {
   position: absolute; top: 8px; left: 8px; display: flex; align-items: center; gap: 5px;
-  font-family: "Chakra Petch"; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  font-family: var(--font-display); font-size: 10px; font-weight: 700; letter-spacing: 1px;
   padding: 3px 8px; border-radius: 999px; background: rgba(255,45,111,0.85); color: #fff;
   backdrop-filter: blur(4px);
 }
 .cam-window .cam-badge i { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: liveDot 1.1s ease-in-out infinite; }
 @keyframes liveDot { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-.cam-window .cam-label { position: absolute; bottom: 8px; left: 10px; font-family: "Chakra Petch"; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.7); letter-spacing: 1px; }
+.cam-window .cam-label { position: absolute; bottom: 8px; left: 10px; font-family: var(--font-display); font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.7); letter-spacing: 1px; }
 .cam-window .cam-close {
   position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border: none; cursor: pointer;
   border-radius: 50%; background: rgba(0,0,0,0.5); color: #fff; font-size: 12px; line-height: 1;
@@ -624,6 +625,114 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .music-toggle .eq i:nth-child(1){animation-delay:0s} .music-toggle .eq i:nth-child(2){animation-delay:.15s} .music-toggle .eq i:nth-child(3){animation-delay:.3s} .music-toggle .eq i:nth-child(4){animation-delay:.45s}
 @keyframes eq { 0%,100%{height:4px} 50%{height:15px} }
 .music-toggle:not(.playing) .music-icon { opacity: 0.5; }
+
+/* ============================================================
+   Economy: JC badge, HUD wallet, reward strip
+   ============================================================ */
+.jc-badge { display: inline-grid; place-items: center; border-radius: 50%; font-family: var(--font-display); font-weight: 700; color: #6b4a08; background: radial-gradient(circle at 35% 30%, #ffe79a, #ffd05a 55%, #c9941f); box-shadow: 0 0 8px rgba(255,208,90,0.55), inset 0 -2px 3px rgba(120,80,10,0.4); flex-shrink: 0; }
+
+.hud-cash { display: flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px); cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
+.hud-cash:hover { border-color: var(--gold); box-shadow: 0 0 20px rgba(255,208,90,0.3); }
+.hud-cash .cash-num { font-family: var(--font-display); font-size: 14px; font-variant-numeric: tabular-nums; }
+.hud-cash .gem-ic { font-size: 14px; margin-left: 4px; }
+.boost-pill { font-family: var(--font-display); font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--grad-cyan); color: #06131a; }
+.prem-pill { font-size: 12px; color: var(--gold); }
+
+.reward-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 26px; }
+.rw-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px); }
+.rw-card.ready { border-color: var(--gold); box-shadow: 0 0 24px -8px rgba(255,208,90,0.5); }
+.rw-card .rw-ic { font-size: 26px; }
+.rw-card .rw-body { flex: 1; min-width: 0; }
+.rw-card .rw-title { font-weight: 600; font-size: 14px; }
+.rw-card .rw-sub { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+.rw-card .rw-bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); margin-top: 7px; overflow: hidden; }
+.rw-card .rw-bar > i { display: block; height: 100%; border-radius: 999px; background: var(--grad-cyan); }
+.rw-card .btn { padding: 9px 18px; font-size: 13px; flex-shrink: 0; }
+
+/* ============================================================
+   Shop
+   ============================================================ */
+.wallet-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border-radius: var(--r-lg); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px); }
+.wallet-chip { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.wallet-chip b { font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+.wallet-bar .btn { margin-left: auto; padding: 9px 18px; font-size: 13px; }
+
+.aura-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.aura-card { padding: 16px; border-radius: var(--r-lg); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px); display: flex; flex-direction: column; gap: 9px; transition: transform 0.2s, border-color 0.2s; }
+.aura-card:hover { transform: translateY(-3px); border-color: var(--stroke-strong); }
+.aura-card.equipped { border-color: var(--accent-3); box-shadow: 0 0 24px -8px rgba(34,224,214,0.5); }
+.aura-swatch { height: 54px; border-radius: var(--r-sm); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15), 0 6px 18px -8px rgba(0,0,0,0.6); }
+.aura-name { font-family: var(--font-display); font-size: 15px; }
+.aura-desc { font-size: 12.5px; color: var(--text-dim); line-height: 1.45; flex: 1; }
+.aura-action .btn { width: 100%; padding: 10px; font-size: 13px; }
+
+.gem-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.gem-card { padding: 20px; border-radius: var(--r-lg); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px); text-align: center; display: flex; flex-direction: column; gap: 8px; }
+.gem-card.owned { border-color: var(--gold); }
+.gem-card .gem-ic-big { font-size: 34px; }
+.gem-card .gem-name { font-family: var(--font-display); font-size: 17px; }
+.gem-card .gem-desc { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; flex: 1; }
+
+/* Gems modal */
+.modal-back { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(5,3,12,0.75); backdrop-filter: blur(6px); animation: screenIn 0.25s var(--ease); }
+.modal { width: min(440px, calc(100vw - 32px)); padding: 26px; border-radius: var(--r-xl); background: var(--panel-solid); border: 1px solid var(--stroke-strong); box-shadow: var(--shadow); }
+.modal h3 { font-family: var(--font-display); font-size: 20px; margin-bottom: 6px; }
+.modal .modal-note { font-size: 12.5px; color: var(--text-faint); margin-bottom: 16px; line-height: 1.5; }
+.gem-pack { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-md); background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); margin-bottom: 10px; }
+.gem-pack .gp-name { flex: 1; font-weight: 600; font-size: 14px; }
+.gem-pack .gp-price { font-size: 12px; color: var(--text-faint); }
+.gem-pack .btn { padding: 8px 16px; font-size: 13px; }
+
+/* ============================================================
+   JerkWorld / bosses
+   ============================================================ */
+.boss-path { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.boss-node { position: relative; padding: 18px; border-radius: var(--r-lg); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px); text-align: center; transition: transform 0.2s, border-color 0.2s; }
+.boss-node.next { border-color: var(--accent-2); box-shadow: 0 0 28px -8px rgba(255,61,127,0.55); cursor: pointer; }
+.boss-node.next:hover { transform: translateY(-4px) scale(1.02); }
+.boss-node.beaten { cursor: pointer; opacity: 0.85; }
+.boss-node.beaten:hover { transform: translateY(-2px); }
+.boss-node.locked { opacity: 0.45; filter: grayscale(0.7); }
+.boss-node .bn-emoji { font-size: 44px; margin-bottom: 6px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5)); }
+.boss-node .bn-name { font-family: var(--font-display); font-size: 17px; }
+.boss-node .bn-title { font-size: 12px; color: var(--text-faint); margin: 2px 0 6px; }
+.boss-node .bn-meta { font-size: 11.5px; color: var(--text-dim); }
+.boss-node .bn-badge { margin-top: 9px; display: inline-block; font-family: var(--font-display); font-size: 11px; letter-spacing: 1px; padding: 4px 12px; border-radius: 999px; background: rgba(62,224,138,0.15); color: var(--good); border: 1px solid rgba(62,224,138,0.4); }
+.boss-node .bn-badge.fight { background: var(--grad-hot); color: #fff; border: none; animation: pulseGlow 1.6s ease-in-out infinite; }
+@keyframes pulseGlow { 0%,100% { box-shadow: 0 0 10px rgba(255,61,127,0.5); } 50% { box-shadow: 0 0 22px rgba(255,61,127,0.9); } }
+.boss-link { display: none; }
+.world-clear { margin-top: 22px; text-align: center; font-family: var(--font-display); font-size: 20px; color: var(--gold); text-shadow: 0 0 20px rgba(255,208,90,0.6); }
+
+.boss-stage { position: relative; max-width: 640px; margin: 0 auto; padding: 24px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(14px); text-align: center; }
+.boss-figure { font-size: clamp(72px, 16vw, 120px); line-height: 1.1; display: inline-block; filter: drop-shadow(0 0 26px rgba(255,61,127,0.45)); transition: transform 0.06s; }
+.boss-figure.hurt { animation: bossHurt 0.16s ease-out; }
+@keyframes bossHurt { 0% { transform: scale(1); filter: drop-shadow(0 0 26px rgba(255,61,127,0.45)) brightness(1); } 40% { transform: scale(0.94) rotate(2deg); filter: drop-shadow(0 0 34px rgba(255,80,80,0.9)) brightness(1.8); } 100% { transform: scale(1); } }
+.boss-figure.enraged { animation: bossRage 0.4s ease-in-out infinite; filter: drop-shadow(0 0 34px rgba(255,45,60,0.8)); }
+@keyframes bossRage { 0%,100% { transform: translateX(-2px); } 50% { transform: translateX(2px); } }
+.boss-shield { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); font-size: 44px; filter: drop-shadow(0 0 16px rgba(127,176,255,0.9)); animation: shieldPulse 0.7s ease-in-out infinite; z-index: 3; }
+@keyframes shieldPulse { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.12); } }
+.boss-name-line { font-family: var(--font-display); font-size: 19px; margin-top: 8px; }
+.boss-title-line { color: var(--text-faint); font-size: 13px; font-family: var(--font); }
+.boss-taunt { font-size: 13px; color: var(--text-dim); font-style: italic; margin: 4px 0 14px; }
+.boss-hp-track { position: relative; height: 26px; border-radius: 999px; background: rgba(255,255,255,0.07); border: 1px solid var(--stroke-strong); overflow: hidden; }
+.boss-hp-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #ff2d4d, #ff7a3d); transition: width 0.12s linear; box-shadow: 0 0 18px rgba(255,61,80,0.55); }
+.boss-hp-fill.enraged { background: linear-gradient(90deg, #ff0f30, #ff2d6f); animation: hpFlash 0.4s ease-in-out infinite; }
+@keyframes hpFlash { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
+.boss-hp-num { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 13px; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.8); font-variant-numeric: tabular-nums; }
+.boss-status { min-height: 22px; margin-top: 10px; font-family: var(--font-display); font-size: 14px; letter-spacing: 1px; color: var(--accent-3); }
+.boss-status.warn { color: var(--bad); }
+
+/* ============================================================
+   Admin panel
+   ============================================================ */
+.admin-sec { font-family: var(--font-display); font-size: 15px; letter-spacing: 1px; margin: 22px 0 10px; color: var(--text-dim); }
+.admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.admin-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); color: var(--text); font-family: var(--font); cursor: pointer; text-align: left; transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; }
+.admin-btn:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--glow-accent); }
+.admin-btn:active { transform: scale(0.97); }
+.admin-btn .ab-ic { font-size: 22px; }
+.admin-btn .ab-label { font-weight: 600; font-size: 13.5px; }
+.admin-btn .ab-sub { font-size: 11px; color: var(--text-faint); }
 
 /* ============================================================
    Utility

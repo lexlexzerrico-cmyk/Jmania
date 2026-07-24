@@ -3,6 +3,16 @@
    ============================================================ */
 import { LADDER, rankFromIndex, levelProgress, levelTitle, RR_PER_DIVISION } from "./ranks.js";
 import { ACHIEVEMENTS, isUnlocked } from "./achievements.js";
+import { comboToMult } from "./game.js";
+import { AURAS, auraById } from "./fx.js";
+import { BOSSES } from "./rpg.js";
+import {
+  dailyInfo, playtimeInfo, boostActive, boostRemainMin,
+  BOOST_COST_GEMS, PREMIUM_COST_GEMS,
+} from "./economy.js";
+
+export const jcBadge = (size = 18) =>
+  `<span class="jc-badge" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.48)}px">JC</span>`;
 
 export const THEMES = [
   { key: "violet",  name: "Neon Violet", grad: "linear-gradient(135deg,#ff3d7f,#b14dff,#6a5bff)" },
@@ -15,10 +25,6 @@ export const THEMES = [
 
 export const AVATARS = ["🫵", "😎", "🔥", "👑", "🤖", "🦾", "⚡", "🐐", "💪", "🎯", "👻", "🦊"];
 
-// Mirror of the match multiplier cap (game.js MAX_MULT) so displayed
-// multipliers never exceed what the game actually awards.
-const MAX_MULT = 6;
-const comboMult = (combo) => Math.min(MAX_MULT, 1 + combo * 0.2);
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -108,7 +114,15 @@ export function toast(msg, icon = "✨") {
 export function renderHud(profile) {
   const lp = levelProgress(profile.xp);
   const rank = rankFromIndex(profile.rankIndex);
+  const boost = boostActive(profile);
   return `
+    <div class="hud-cash" data-nav="shop" title="Open shop">
+      ${jcBadge(20)}<span class="cash-num">${(profile.jc || 0).toLocaleString()}</span>
+      <span class="gem-ic">💎</span><span class="cash-num">${(profile.gems || 0).toLocaleString()}</span>
+      ${boost ? `<span class="boost-pill" title="2x JC boost active">2×</span>` : ""}
+      ${profile.premium ? `<span class="prem-pill" title="Premium">★</span>` : ""}
+    </div>
+    ${profile.adminUnlocked ? `<button class="hud-gear" data-nav="admin" title="Admin panel" aria-label="Admin panel">🛠️</button>` : ""}
     <div class="hud-level" data-nav="ranks" title="View progression">
       <div class="lvl-badge">${lp.level}</div>
       <div class="lvl-meta">
@@ -173,6 +187,20 @@ export function renderLobby(profile) {
         <p>Endless, no timer, no stakes. Warm up, tune your mic, and chase your top CPS.</p>
         <div class="mc-go">Warm up <span class="arrow">→</span></div>
       </div>
+      <div class="mode-card" style="--mc:rgba(255,61,127,0.3)" data-nav="world">
+        <span class="mc-tag">${profile.rpgBeaten || 0}/${BOSSES.length} bosses</span>
+        <div class="mc-icon">🗺️</div>
+        <h3>JerkWorld</h3>
+        <p>The boss-rush RPG. Clap down Jerkling, Clapzilla, the Palmfather… all the way to OMEGA JERKGOD.</p>
+        <div class="mc-go">Enter world <span class="arrow">→</span></div>
+      </div>
+      <div class="mode-card" style="--mc:rgba(255,208,90,0.3)" data-nav="shop">
+        <span class="mc-tag">${(profile.jc || 0).toLocaleString()} JC</span>
+        <div class="mc-icon">🛒</div>
+        <h3>Shop</h3>
+        <p>Spend Jerk Coins on auras — fire, ice, thunder, void — each with its own clap effects and sounds.</p>
+        <div class="mc-go">Browse <span class="arrow">→</span></div>
+      </div>
       <div class="mode-card custom" data-play="custom">
         <span class="mc-tag">Your rules</span>
         <div class="mc-icon">🎛️</div>
@@ -189,16 +217,52 @@ export function renderLobby(profile) {
       </div>
     </div>
 
+    ${renderRewardRow(profile)}
+
     <div class="stat-strip">
       <div class="stat-box"><div class="v">${s.bestScore.toLocaleString()}</div><div class="l">Best Score</div></div>
       <div class="stat-box"><div class="v">${s.bestCps}</div><div class="l">Top CPS</div></div>
-      <div class="stat-box"><div class="v">x${comboMult(s.bestCombo).toFixed(1)}</div><div class="l">Best Combo</div></div>
+      <div class="stat-box"><div class="v">x${comboToMult(s.bestCombo).toFixed(1)}</div><div class="l">Best Combo</div></div>
       <div class="stat-box"><div class="v">${winrate}%</div><div class="l">Win Rate</div></div>
       <div class="stat-box"><div class="v">${s.totalClaps.toLocaleString()}</div><div class="l">Total Claps</div></div>
     </div>
 
     ${renderHistory(profile)}
   </section>`;
+}
+
+function renderRewardRow(profile) {
+  const d = dailyInfo(profile);
+  const pt = playtimeInfo(profile);
+  const boost = boostActive(profile);
+  return `
+  <div class="reward-strip">
+    <div class="rw-card ${d.claimable ? "ready" : ""}">
+      <div class="rw-ic">📅</div>
+      <div class="rw-body">
+        <div class="rw-title">Daily Reward${d.streak > 1 ? ` · ${d.streak}🔥` : ""}</div>
+        <div class="rw-sub">${d.claimable ? `${d.reward} JC waiting` : "Come back tomorrow"}</div>
+      </div>
+      <button class="btn ${d.claimable ? "" : "ghost"}" id="claim-daily" ${d.claimable ? "" : "disabled"}>${d.claimable ? "Claim" : "✓"}</button>
+    </div>
+    <div class="rw-card ${pt.chunks > 0 ? "ready" : ""}">
+      <div class="rw-ic">⏱️</div>
+      <div class="rw-body">
+        <div class="rw-title">Playtime Reward</div>
+        <div class="rw-sub">${pt.chunks > 0 ? `${pt.reward} JC ready` : `${pt.remainMin} min to next 50 JC`}</div>
+        <div class="rw-bar"><i style="width:${Math.round(pt.progress * 100)}%"></i></div>
+      </div>
+      <button class="btn ${pt.chunks > 0 ? "" : "ghost"}" id="claim-playtime" ${pt.chunks > 0 ? "" : "disabled"}>${pt.chunks > 0 ? "Claim" : "…"}</button>
+    </div>
+    ${boost ? `
+    <div class="rw-card ready">
+      <div class="rw-ic">⚡</div>
+      <div class="rw-body">
+        <div class="rw-title">2× JC Boost</div>
+        <div class="rw-sub">${boostRemainMin(profile)} min remaining</div>
+      </div>
+    </div>` : ""}
+  </div>`;
 }
 
 function renderHistory(profile) {
@@ -363,6 +427,10 @@ export function renderSettings(profile) {
         <button class="btn ghost" id="reset-btn" style="border-color:var(--bad);color:var(--bad);margin-top:10px">🗑️ Reset all progress</button>
       </div>
 
+      <div class="center" style="margin-top:18px">
+        <button class="btn ghost" id="admin-access" style="font-size:12px;opacity:0.6">🛠️ Developer access</button>
+      </div>
+
       <div class="center mt-24"><button class="btn ghost" data-nav="lobby">← Back</button></div>
     </div>
   </section>`;
@@ -507,7 +575,7 @@ export function renderArena(cfg, profile) {
 }
 
 // ---- Results ---------------------------------------------------------------
-export function renderResults(result, report, snapshot = null) {
+export function renderResults(result, report, snapshot = null, jcReport = null) {
   const rc = report.rankChange;
   const rankLine = (result.ranked && !result.practice)
     ? (rc === 1
@@ -554,10 +622,18 @@ export function renderResults(result, report, snapshot = null) {
       <div class="res-grid" style="margin-top:22px">
         <div class="rb"><div class="v">${result.totalClaps}</div><div class="l">Claps</div></div>
         <div class="rb"><div class="v">${result.peakCps}</div><div class="l">Peak CPS</div></div>
-        <div class="rb"><div class="v">x${comboMult(result.peakCombo).toFixed(1)}</div><div class="l">Best Combo</div></div>
+        <div class="rb"><div class="v">x${comboToMult(result.peakCombo).toFixed(1)}</div><div class="l">Best Combo</div></div>
       </div>
 
       <div class="reward-row">
+        ${jcReport ? `
+        <div class="reward">
+          <span class="r-ic">${jcBadge(24)}</span>
+          <div class="r-body">
+            <div class="r-title">Jerk Coins${jcReport.mult > 1 ? ` <span style="color:var(--gold)">×${jcReport.mult} active</span>` : ""}</div>
+          </div>
+          <span class="r-delta up">+${jcReport.total.toLocaleString()}</span>
+        </div>` : ""}
         <div class="reward xp">
           <span class="r-ic">⭐</span>
           <div class="r-body">
@@ -582,6 +658,241 @@ export function renderResults(result, report, snapshot = null) {
         <button class="btn big" data-play="${result.mode}">🔁 Play Again</button>
         <button class="btn ghost big" data-nav="lobby">🏠 Lobby</button>
       </div>
+    </div>
+  </section>`;
+}
+
+// ---- Shop ------------------------------------------------------------------
+export function renderShop(profile) {
+  const owned = profile.ownedAuras || ["none"];
+  const cards = AURAS.map((a) => {
+    if (a.tier === "admin" && !profile.adminUnlocked) return "";
+    const isOwned = owned.includes(a.id);
+    const equipped = profile.equippedAura === a.id;
+    const locked = a.tier === "premium" && !profile.premium;
+    const swatch = a.hueCycle
+      ? "linear-gradient(90deg,#ff3d3d,#ffd03a,#3ee08a,#22a8e0,#b14dff)"
+      : `linear-gradient(135deg, ${(a.colors || []).join(",")})`;
+    let action;
+    if (equipped) action = `<button class="btn ghost" disabled>✓ Equipped</button>`;
+    else if (isOwned) action = `<button class="btn cyan" data-equip="${a.id}">Equip</button>`;
+    else if (a.tier === "admin") action = `<button class="btn ghost" disabled>🛠️ Admin</button>`;
+    else if (locked) action = `<button class="btn ghost" disabled>★ Premium only</button>`;
+    else action = `<button class="btn" data-buy="${a.id}">${a.price.toLocaleString()} ${a.tier === "premium" ? "JC" : "JC"}</button>`;
+    return `
+      <div class="aura-card ${equipped ? "equipped" : ""}">
+        <div class="aura-swatch" style="background:${swatch}"></div>
+        <div class="aura-name">${a.name} ${a.tier === "premium" ? "★" : ""}${a.tier === "admin" ? " 🛠️" : ""}</div>
+        <div class="aura-desc">${a.desc}</div>
+        <div class="aura-action">${action}</div>
+      </div>`;
+  }).join("");
+
+  return `
+  <section class="screen">
+    <div class="section-title"><h2>Shop</h2><span class="sub">auras & boosts</span></div>
+
+    <div class="wallet-bar">
+      <div class="wallet-chip">${jcBadge(24)} <b>${(profile.jc || 0).toLocaleString()}</b> Jerk Coins</div>
+      <div class="wallet-chip">💎 <b>${(profile.gems || 0).toLocaleString()}</b> Gems</div>
+      <button class="btn cyan" id="get-gems">Get Gems</button>
+    </div>
+
+    <div class="section-title" style="margin-top:22px"><h2 style="font-size:20px">Auras</h2><span class="sub">equip one — it changes your clap effects & sound</span></div>
+    <div class="aura-grid">${cards}</div>
+
+    <div class="section-title" style="margin-top:26px"><h2 style="font-size:20px">Gem Store</h2><span class="sub">premium currency</span></div>
+    <div class="gem-grid">
+      <div class="gem-card">
+        <div class="gem-ic-big">⚡</div>
+        <div class="gem-name">2× JC Boost</div>
+        <div class="gem-desc">Double all Jerk Coin earnings for 20 minutes. Stacks with Premium.</div>
+        <button class="btn" id="buy-boost">💎 ${BOOST_COST_GEMS}</button>
+      </div>
+      <div class="gem-card ${profile.premium ? "owned" : ""}">
+        <div class="gem-ic-big">★</div>
+        <div class="gem-name">Premium</div>
+        <div class="gem-desc">+50% JC forever · +100 daily bonus · exclusive Galaxy aura · gold name.</div>
+        ${profile.premium
+          ? `<button class="btn ghost" disabled>✓ Active</button>`
+          : `<button class="btn" id="buy-premium">💎 ${PREMIUM_COST_GEMS}</button>`}
+      </div>
+    </div>
+
+    <div class="center mt-24"><button class="btn ghost" data-nav="lobby">← Back to lobby</button></div>
+  </section>`;
+}
+
+// ---- JerkWorld map ---------------------------------------------------------
+export function renderWorld(profile) {
+  const beaten = profile.rpgBeaten || 0;
+  const nodes = BOSSES.map((b, i) => {
+    const state = i < beaten ? "beaten" : i === beaten ? "next" : "locked";
+    return `
+      <div class="boss-node ${state}" ${state !== "locked" ? `data-boss="${i}"` : ""}>
+        <div class="bn-emoji">${state === "locked" ? "🔒" : b.emoji}</div>
+        <div class="bn-name">${state === "locked" ? "???" : b.name}</div>
+        <div class="bn-title">${state === "locked" ? "Defeat the previous boss" : b.title}</div>
+        <div class="bn-meta">${state === "locked" ? "" : `${b.hp} HP · ${b.time}s · +${b.rewardJc} JC`}</div>
+        ${state === "beaten" ? `<div class="bn-badge">✓ DEFEATED</div>` : ""}
+        ${state === "next" ? `<div class="bn-badge fight">⚔️ FIGHT</div>` : ""}
+      </div>`;
+  }).join('<div class="boss-link"></div>');
+
+  return `
+  <section class="screen">
+    <div class="section-title"><h2>🗺️ JerkWorld</h2><span class="sub">${beaten}/${BOSSES.length} bosses defeated</span></div>
+    <p style="color:var(--text-dim);margin-bottom:18px;max-width:640px">Clap bosses to death before the timer runs out. Watch the <b>shield phases</b> — claps bounce off while it's up. Bosses regenerate, and they get <b style="color:var(--bad)">angry</b> below 25% HP.</p>
+    <div class="boss-path">${nodes}</div>
+    ${beaten >= BOSSES.length ? `<div class="world-clear">👑 WORLD CLEARED — you are the true JERKGOD</div>` : ""}
+    <div class="center mt-24"><button class="btn ghost" data-nav="lobby">← Back to lobby</button></div>
+  </section>`;
+}
+
+// ---- Boss fight ------------------------------------------------------------
+export function renderBossFight(boss, profile) {
+  return `
+  <section class="screen arena">
+    <div class="arena-top">
+      <div class="mode-badge">⚔️ ${boss.name.toUpperCase()}</div>
+      <div class="timer-ring">
+        <svg width="108" height="108">
+          <circle cx="54" cy="54" r="48" stroke="rgba(255,255,255,0.08)" stroke-width="8" fill="none"/>
+          <circle id="timer-arc" cx="54" cy="54" r="48" stroke="url(#tg)" stroke-width="8" fill="none"
+            stroke-linecap="round" stroke-dasharray="301.6" stroke-dashoffset="0"/>
+          <defs><linearGradient id="tg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#22e0d6"/><stop offset="1" stop-color="#b14dff"/>
+          </linearGradient></defs>
+        </svg>
+        <div class="t-text" id="timer-text">${boss.time}</div>
+      </div>
+    </div>
+
+    <div class="boss-stage">
+      <div class="boss-figure" id="boss-figure">${boss.emoji}</div>
+      <div class="boss-shield hidden" id="boss-shield">🛡️</div>
+      <div class="boss-name-line">${boss.name} <span class="boss-title-line">· ${boss.title}</span></div>
+      <div class="boss-taunt">“${boss.taunt}”</div>
+      <div class="boss-hp-track">
+        <div class="boss-hp-fill" id="boss-hp" style="width:100%"></div>
+        <div class="boss-hp-num" id="boss-hp-num">${boss.hp} / ${boss.hp}</div>
+      </div>
+      <div class="boss-status" id="boss-status"></div>
+    </div>
+
+    <div class="clap-stage" style="max-width:520px;padding:20px 24px;margin-top:18px">
+      <div class="clap-emoji" id="clap-emoji" style="font-size:clamp(52px,11vw,84px)">👏</div>
+      <div class="combo-wrap">
+        <div class="combo-line">
+          <span class="combo-x" id="combo-x">x1.0</span>
+          <span class="combo-txt">damage multiplier — keep the tempo up</span>
+        </div>
+      </div>
+      <div class="cps-meter">
+        <div class="cps-track"><div class="cps-fill" id="cps-fill"></div></div>
+        <div class="cps-labels"><span>claps / sec</span><span class="cps-now" id="cps-now">0</span></div>
+      </div>
+    </div>
+
+    <div class="center mt-24">
+      <button class="btn ghost" id="arena-quit">Retreat</button>
+    </div>
+  </section>`;
+}
+
+// ---- Boss results ----------------------------------------------------------
+export function renderBossResults(r, jcReport, xpGained, isNewKill) {
+  const b = r.boss;
+  return `
+  <section class="screen results">
+    <div class="res-card">
+      <div class="res-verdict ${r.won ? "win" : "loss"}">${r.won ? "BOSS DEFEATED" : "YOU GOT JERKED"}</div>
+      <div style="font-size:64px;margin:10px 0">${r.won ? "💀" : b.emoji}</div>
+      <div style="font-family:var(--font-display);font-size:20px;margin-bottom:4px">${b.name}</div>
+      <div style="color:var(--text-faint);font-size:13px;margin-bottom:16px">${r.won ? (isNewKill ? "New boss down — next node unlocked!" : "Rematch won.") : `${r.hpLeft} HP remaining — so close.`}</div>
+
+      <div class="res-grid">
+        <div class="rb"><div class="v">${r.dmgDealt}</div><div class="l">Damage</div></div>
+        <div class="rb"><div class="v">${r.peakCps}</div><div class="l">Peak CPS</div></div>
+        <div class="rb"><div class="v">${r.blocked}</div><div class="l">Shield Blocks</div></div>
+      </div>
+
+      <div class="reward-row">
+        ${jcReport ? `
+        <div class="reward">
+          <span class="r-ic">${jcBadge(24)}</span>
+          <div class="r-body"><div class="r-title">Jerk Coins${jcReport.mult > 1 ? ` <span style="color:var(--gold)">×${jcReport.mult}</span>` : ""}</div></div>
+          <span class="r-delta up">+${jcReport.total.toLocaleString()}</span>
+        </div>` : ""}
+        ${xpGained ? `
+        <div class="reward xp">
+          <span class="r-ic">⭐</span>
+          <div class="r-body"><div class="r-title">Experience</div></div>
+          <span class="r-delta up">+${xpGained}</span>
+        </div>` : ""}
+      </div>
+
+      <div class="row" style="justify-content:center">
+        ${r.won
+          ? `<button class="btn big" data-nav="world">🗺️ Back to map</button>`
+          : `<button class="btn big" data-boss-retry="${BOSSES.indexOf(b)}">🔁 Retry</button>`}
+        <button class="btn ghost big" data-nav="lobby">🏠 Lobby</button>
+      </div>
+    </div>
+  </section>`;
+}
+
+// ---- Admin panel -----------------------------------------------------------
+export function renderAdmin(profile) {
+  const btn = (id, icon, label, sub = "") =>
+    `<button class="admin-btn" id="${id}"><span class="ab-ic">${icon}</span><span class="ab-label">${label}</span>${sub ? `<span class="ab-sub">${sub}</span>` : ""}</button>`;
+  return `
+  <section class="screen">
+    <div class="section-title"><h2>🛠️ Admin Panel</h2><span class="sub">developer access — with great power…</span></div>
+
+    <div class="admin-sec">💰 Currency</div>
+    <div class="admin-grid">
+      ${btn("adm-jc1", "🪙", "+1,000 JC")}
+      ${btn("adm-jc10", "💰", "+10,000 JC")}
+      ${btn("adm-jc100", "🏦", "+100,000 JC")}
+      ${btn("adm-gems", "💎", "+1,000 Gems")}
+      ${btn("adm-jcdrop", "🌧️", "JC DROP", "coin rain + 500 JC")}
+      ${btn("adm-boost", "⚡", "Activate 2× Boost", "20 min")}
+    </div>
+
+    <div class="admin-sec">📈 Progression</div>
+    <div class="admin-grid">
+      ${btn("adm-rankup", "⬆️", "+1 Division")}
+      ${btn("adm-rankdown", "⬇️", "−1 Division")}
+      ${btn("adm-radiant", "🌟", "Max Rank", "straight to Radiant")}
+      ${btn("adm-lvl10", "⭐", "+10 Levels")}
+      ${btn("adm-ach", "🏅", "Unlock All Achievements")}
+      ${btn("adm-bosses", "🗺️", "Unlock All Bosses")}
+    </div>
+
+    <div class="admin-sec">✨ Cosmetics</div>
+    <div class="admin-grid">
+      ${btn("adm-auras", "🎨", "Unlock All Auras")}
+      ${btn("adm-dev", "👨‍💻", "Equip Developer Aura", "matrix glyphs")}
+      ${btn("adm-susanoo", "👹", "Equip Spectral Guardian", "giant spirit warrior")}
+      ${btn("adm-guardian", "⚔️", "Test Guardian Flash")}
+      ${btn("adm-burst", "💥", "Test Aura Burst")}
+      ${btn("adm-premium", "★", profile.premium ? "Revoke Premium" : "Grant Premium")}
+    </div>
+
+    <div class="admin-sec">🎮 Game</div>
+    <div class="admin-grid">
+      ${btn("adm-god", "🙏", profile.godClap ? "God Clap: ON" : "God Clap: OFF", "10× boss damage")}
+      ${btn("adm-daily", "📅", "Reset Daily Reward")}
+      ${btn("adm-playtime", "⏱️", "+10 min Playtime")}
+      ${btn("adm-history", "🧹", "Clear Match History")}
+      ${btn("adm-hype", "🔥", "Test Hype Callout")}
+      ${btn("adm-reset", "💣", "FULL RESET", "wipe everything")}
+    </div>
+
+    <div class="center mt-24">
+      <button class="btn ghost" id="adm-lock">🔒 Lock admin panel</button>
+      <button class="btn ghost" data-nav="lobby">← Back to lobby</button>
     </div>
   </section>`;
 }
@@ -626,22 +937,4 @@ export function initParticles() {
   return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize); };
 }
 
-// Burst of clap particles at center of the stage
-export function clapBurst(strength = 1) {
-  const stage = $(".clap-stage");
-  if (!stage) return;
-  const n = 6 + Math.floor(strength * 6);
-  for (let i = 0; i < n; i++) {
-    const s = document.createElement("span");
-    s.textContent = ["👏", "✨", "💥", "🔥"][Math.floor(Math.random() * 4)];
-    s.style.cssText = `position:absolute;left:50%;top:38%;font-size:${14 + Math.random()*18}px;pointer-events:none;z-index:5;transition:transform .7s cubic-bezier(.2,1,.3,1),opacity .7s;`;
-    stage.appendChild(s);
-    requestAnimationFrame(() => {
-      const ang = Math.random() * Math.PI * 2;
-      const dist = 60 + Math.random() * 120;
-      s.style.transform = `translate(${Math.cos(ang)*dist}px, ${Math.sin(ang)*dist - 40}px) scale(${0.6 + Math.random()})`;
-      s.style.opacity = "0";
-    });
-    setTimeout(() => s.remove(), 750);
-  }
-}
+

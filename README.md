@@ -26,6 +26,10 @@ Any static host works too (GitHub Pages, Netlify, Vercel, `npx serve`, …).
   adaptive noise floor with a refractory gate, so a single clap counts once and
   background rumble is ignored. Adjustable sensitivity + one-tap calibration.
 - **Keyboard / tap fallback** — no mic? Press **Space** or tap the stage.
+- **Live webcam** — an optional floating **LIVE** cam window (toggle bottom-left
+  or from the mic-check screen) so you can watch yourself clap. Its neon border
+  pulses on every detected clap. Runs as a separate video-only stream, off by
+  default, and never recorded or uploaded (`js/camera.js`).
 - **Game modes**
   - 🏆 **Ranked** — win to gain RR and climb divisions toward Radiant.
   - ⚡ **Classic** — a clean 30-second high-score sprint.

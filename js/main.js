@@ -4,6 +4,7 @@
 import { loadProfile, saveProfile, applyMatchResult } from "./storage.js";
 import { rankFromIndex, levelProgress } from "./ranks.js";
 import { ClapEngine } from "./audio.js";
+import { Camera } from "./camera.js";
 import { LobbyMusic } from "./music.js";
 import { Match, makeBot } from "./game.js";
 import {
@@ -16,6 +17,7 @@ const app = $("#app");
 const state = {
   profile: loadProfile(),
   clap: new ClapEngine(),
+  camera: new Camera(),
   music: new LobbyMusic(),
   match: null,
   inputMode: "mic",     // "mic" | "keyboard"
@@ -154,6 +156,10 @@ function showMicPanel() {
     state.inputMode = "keyboard";
     beginMatch();
   });
+
+  const camPanelBtn = $("#mic-cam");
+  camPanelBtn.addEventListener("click", () => setCam(!state.camera.on));
+  syncMicPanelCamBtn();
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +277,11 @@ function wireMatchEvents(match, cfg) {
     setTimeout(() => comboEl.classList.remove("bump"), 100);
     clapEmoji.classList.remove("pulse"); void clapEmoji.offsetWidth; clapEmoji.classList.add("pulse");
     clapBurst(strength);
+    if (state.camera.on) {
+      camWindow.classList.add("pulse");
+      clearTimeout(state._camPulse);
+      state._camPulse = setTimeout(() => camWindow.classList.remove("pulse"), 130);
+    }
   });
 
   // 1v1 tug-of-war bar updates
@@ -358,6 +369,44 @@ function finishMatch(result) {
 
   state.match = null;
 }
+
+// ---------------------------------------------------------------------------
+// Webcam
+// ---------------------------------------------------------------------------
+const camBtn = $("#cam-toggle");
+const camWindow = $("#cam-window");
+const camVideo = $("#cam-video");
+
+async function setCam(on) {
+  if (on) {
+    try {
+      await state.camera.start(camVideo);
+      camWindow.classList.remove("hidden");
+      camBtn.classList.add("active");
+      toast("Webcam on — say cheese 📸", "📷");
+    } catch (err) {
+      toast("Camera unavailable or blocked", "📷");
+      state.profile.settings.camOn = false;
+      saveProfile(state.profile);
+      return;
+    }
+  } else {
+    state.camera.stop();
+    camWindow.classList.add("hidden");
+    camBtn.classList.remove("active");
+  }
+  state.profile.settings.camOn = state.camera.on;
+  saveProfile(state.profile);
+  syncMicPanelCamBtn();
+}
+
+function syncMicPanelCamBtn() {
+  const b = $("#mic-cam");
+  if (b) b.textContent = state.camera.on ? "📷 Webcam is ON" : "📷 Turn on webcam";
+}
+
+camBtn.addEventListener("click", () => setCam(!state.camera.on));
+$("#cam-close").addEventListener("click", () => setCam(false));
 
 // ---------------------------------------------------------------------------
 // Music

@@ -420,6 +420,52 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
 /* ============================================================
+   Webcam window + toggle
+   ============================================================ */
+.cam-window {
+  position: fixed; left: 22px; bottom: 78px; z-index: 55;
+  width: clamp(160px, 22vw, 236px); aspect-ratio: 4 / 3;
+  border-radius: 18px; overflow: hidden;
+  border: 2px solid var(--stroke-strong);
+  background: #0b0716; box-shadow: var(--shadow), 0 0 0 1px rgba(0,0,0,0.4);
+  transition: border-color 0.12s, box-shadow 0.12s, transform 0.25s var(--ease);
+  animation: camIn 0.35s var(--ease);
+}
+@keyframes camIn { from { opacity: 0; transform: translateY(12px) scale(0.9); } to { opacity: 1; transform: none; } }
+.cam-window video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; background: #0b0716; }
+.cam-window .cam-badge {
+  position: absolute; top: 8px; left: 8px; display: flex; align-items: center; gap: 5px;
+  font-family: "Chakra Petch"; font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  padding: 3px 8px; border-radius: 999px; background: rgba(255,45,111,0.85); color: #fff;
+  backdrop-filter: blur(4px);
+}
+.cam-window .cam-badge i { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: liveDot 1.1s ease-in-out infinite; }
+@keyframes liveDot { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+.cam-window .cam-label { position: absolute; bottom: 8px; left: 10px; font-family: "Chakra Petch"; font-size: 12px; font-weight: 700; color: #fff; text-shadow: 0 1px 6px rgba(0,0,0,0.7); letter-spacing: 1px; }
+.cam-window .cam-close {
+  position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border: none; cursor: pointer;
+  border-radius: 50%; background: rgba(0,0,0,0.5); color: #fff; font-size: 12px; line-height: 1;
+  display: grid; place-items: center; backdrop-filter: blur(4px); transition: background 0.15s;
+}
+.cam-window .cam-close:hover { background: rgba(255,45,111,0.85); }
+.cam-window.pulse { border-color: var(--accent-3); box-shadow: 0 0 26px rgba(34,224,214,0.6); transform: scale(1.03); }
+
+.cam-toggle {
+  position: fixed; bottom: 22px; left: 22px; z-index: 50;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; border-radius: 999px; cursor: pointer;
+  background: var(--panel-solid); border: 1px solid var(--stroke-strong);
+  backdrop-filter: blur(10px); color: var(--text); font-family: var(--font);
+  box-shadow: var(--shadow); transition: transform 0.2s, box-shadow 0.2s;
+}
+.cam-toggle:hover { transform: translateY(-2px); box-shadow: var(--glow-accent); }
+.cam-toggle .cam-ic { filter: grayscale(1); opacity: 0.6; transition: filter 0.2s, opacity 0.2s; }
+.cam-toggle.active { border-color: var(--accent-3); }
+.cam-toggle.active .cam-ic { filter: none; opacity: 1; }
+
+@media (max-width: 620px) { .cam-toggle .cam-txt { display: none; } }
+
+/* ============================================================
    Music toggle
    ============================================================ */
 .music-toggle {

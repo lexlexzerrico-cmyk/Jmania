@@ -36,6 +36,20 @@
     <!-- Screens are injected here by the router -->
   </main>
 
+  <!-- Live webcam window -->
+  <div class="cam-window hidden" id="cam-window">
+    <video id="cam-video" autoplay playsinline muted></video>
+    <span class="cam-badge"><i></i>LIVE</span>
+    <span class="cam-label">YOU</span>
+    <button class="cam-close" id="cam-close" title="Turn off camera" aria-label="Turn off camera">✕</button>
+  </div>
+
+  <!-- Camera toggle -->
+  <button class="cam-toggle" id="cam-toggle" title="Toggle webcam" aria-label="Toggle webcam">
+    <span class="cam-ic">📷</span>
+    <span class="cam-txt">Cam</span>
+  </button>
+
   <!-- Music control -->
   <button class="music-toggle" id="music-toggle" title="Toggle lobby music" aria-label="Toggle lobby music">
     <span class="music-icon">🎵</span>

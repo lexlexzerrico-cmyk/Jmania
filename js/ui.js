@@ -192,8 +192,9 @@ export function renderMicPanel(modeLabel, sensitivity, supported) {
       <div class="row mt-24" style="justify-content:center">
         <button class="btn big" id="mic-enable">🎧 Enable Mic & Continue</button>
       </div>
-      <div class="row center" style="margin-top:12px">
-        <button class="btn ghost" id="mic-keyboard">Use keyboard instead (Space / tap)</button>
+      <div class="row center" style="margin-top:12px; gap:10px">
+        <button class="btn ghost" id="mic-cam">📷 Turn on webcam</button>
+        <button class="btn ghost" id="mic-keyboard">⌨️ Keyboard / tap</button>
       </div>
       <div class="no-mic-note" id="mic-note">${supported ? "Tip: in a noisy room, lower sensitivity." : "No microphone API here — keyboard/tap mode will be used."}</div>
       <div class="center mt-24"><button class="btn ghost" data-nav="lobby">← Cancel</button></div>

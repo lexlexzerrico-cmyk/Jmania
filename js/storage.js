@@ -21,6 +21,7 @@ const DEFAULT_PROFILE = {
   settings: {
     sensitivity: 0.5,   // 0..1
     musicOn: true,
+    camOn: false,       // webcam feed (off by default for privacy)
   },
 };
 

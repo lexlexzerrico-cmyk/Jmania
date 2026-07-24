@@ -735,6 +735,52 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .admin-btn .ab-sub { font-size: 11px; color: var(--text-faint); }
 
 /* ============================================================
+   F→S grade badge
+   ============================================================ */
+.grade-badge { display: inline-flex; flex-direction: column; align-items: center; margin-bottom: 8px; }
+.grade-letter { font-family: var(--font-display); font-size: clamp(56px, 15vw, 96px); line-height: 0.9; color: var(--gc); text-shadow: 0 0 30px var(--gc); -webkit-text-stroke: 2px rgba(0,0,0,0.3); animation: gradePop 0.6s var(--ease) both; }
+@keyframes gradePop { 0% { transform: scale(0.3) rotate(-12deg); opacity: 0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+.grade-label { font-family: var(--font-display); font-size: 13px; letter-spacing: 3px; color: var(--gc); margin-top: 2px; }
+
+/* ============================================================
+   Effect shop extras (rarity + preview)
+   ============================================================ */
+.aura-swatch { position: relative; }
+.aura-rarity { position: absolute; top: 6px; left: 6px; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid; backdrop-filter: blur(4px); }
+.aura-preview { position: absolute; bottom: 6px; right: 6px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 999px; cursor: pointer; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: #fff; backdrop-filter: blur(4px); transition: background 0.15s; }
+.aura-preview:hover { background: var(--rc, var(--accent)); }
+.aura-card { border-color: var(--rc, var(--stroke)); }
+.aura-card:hover { box-shadow: 0 12px 30px -14px var(--rc, rgba(0,0,0,0.6)); }
+
+/* ============================================================
+   Versus (local 2-player)
+   ============================================================ */
+.versus-keys { display: flex; gap: 16px; max-width: 520px; margin: 20px auto 0; }
+.vs-key { flex: 1; height: clamp(90px, 22vw, 140px); border-radius: var(--r-lg); font-family: var(--font-display); font-size: clamp(40px, 10vw, 64px); color: #fff; cursor: pointer; border: 2px solid transparent; transition: transform 0.06s, box-shadow 0.1s; user-select: none; }
+.vs-key.p1 { background: linear-gradient(135deg, #1650ff, #22c9e0); box-shadow: 0 10px 30px -12px #1650ff; }
+.vs-key.p2 { background: linear-gradient(135deg, #ff2d6f, #ff7a3d); box-shadow: 0 10px 30px -12px #ff2d6f; }
+.vs-key.hit { transform: scale(0.94); box-shadow: 0 0 30px rgba(255,255,255,0.6), inset 0 0 20px rgba(255,255,255,0.4); }
+.vs-key:active { transform: scale(0.94); }
+
+/* ============================================================
+   8-bit overworld
+   ============================================================ */
+.world8-frame { position: relative; max-width: 720px; margin: 0 auto; border-radius: var(--r-lg); overflow: hidden; border: 3px solid var(--stroke-strong); box-shadow: var(--shadow), inset 0 0 0 2px rgba(0,0,0,0.4); background: #2f8f34; aspect-ratio: 22 / 16; }
+.world8-canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+.world8-hint { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); font-size: 11px; padding: 5px 12px; border-radius: 999px; background: rgba(6,3,14,0.7); backdrop-filter: blur(4px); white-space: nowrap; pointer-events: none; }
+.world8-legend { text-align: center; margin-top: 12px; font-size: 13px; color: var(--text-dim); }
+.world-clear-inline { font-family: var(--font-display); color: var(--gold); text-shadow: 0 0 16px rgba(255,208,90,0.6); }
+
+.dpad { position: absolute; bottom: 12px; left: 12px; width: 132px; height: 132px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px; opacity: 0.85; }
+.dpad-btn { border: none; border-radius: 10px; background: rgba(20,12,35,0.8); color: #fff; font-size: 18px; cursor: pointer; backdrop-filter: blur(4px); border: 1px solid var(--stroke-strong); user-select: none; touch-action: none; }
+.dpad-btn:active { background: var(--accent); }
+.dpad-btn.up { grid-column: 2; grid-row: 1; }
+.dpad-btn.left { grid-column: 1; grid-row: 2; }
+.dpad-btn.right { grid-column: 3; grid-row: 2; }
+.dpad-btn.down { grid-column: 2; grid-row: 3; }
+@media (hover: hover) and (pointer: fine) { .dpad { display: none; } }
+
+/* ============================================================
    Utility
    ============================================================ */
 .row { display: flex; gap: 12px; flex-wrap: wrap; }

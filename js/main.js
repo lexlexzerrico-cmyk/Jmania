@@ -9,8 +9,9 @@ import { LobbyMusic } from "./music.js";
 import { Sfx } from "./sfx.js";
 import { Match, makeBot } from "./game.js";
 import { checkAchievements, ACHIEVEMENTS } from "./achievements.js";
-import { FxEngine, AURAS, auraById } from "./fx.js";
+import { FxEngine, EFFECTS, effectById } from "./fx.js";
 import { BOSSES, BossFight } from "./rpg.js";
+import { World8Bit } from "./world8bit.js";
 import {
   earnJc, claimDaily, claimPlaytime, dailyInfo, playtimeInfo,
   buyBoost, buyPremium, grantGems, spendJc, boostActive, BOOST_MS,
@@ -18,7 +19,7 @@ import {
 import {
   $, $$, toast, renderHud, renderLobby, renderRanks, renderCustomSetup,
   renderMicPanel, renderArena, renderResults, renderAchievements, renderSettings,
-  renderShop, renderWorld, renderBossFight, renderBossResults, renderAdmin,
+  renderShop, renderWorld, renderBossFight, renderBossResults, renderAdmin, renderVersus,
   initParticles,
 } from "./ui.js";
 
@@ -61,6 +62,8 @@ function navTo(screen) {
   // leaving arena? make sure any fight stops
   if (state.match) { state.match.abort(); state.match = null; }
   if (state.bossFight) { state.bossFight.abort(); state.bossFight = null; }
+  if (state.world8) { state.world8.destroy(); state.world8 = null; }
+  if (state.versus) { state.versus.stop(); state.versus = null; }
   if (state.inputMode === "mic" && state.micReady) { state.clap.stop(); state.micReady = false; }
   detachKeyboard();
 
@@ -71,7 +74,7 @@ function navTo(screen) {
     case "achievements": app.innerHTML = renderAchievements(state.profile); break;
     case "settings":     app.innerHTML = renderSettings(state.profile); wireSettings(); break;
     case "shop":         app.innerHTML = renderShop(state.profile); wireShop(); break;
-    case "world":        app.innerHTML = renderWorld(state.profile); break;
+    case "world":        app.innerHTML = renderWorld(state.profile); wireWorld8Bit(); break;
     case "admin":
       if (!state.profile.adminUnlocked) { navTo("lobby"); return; }
       app.innerHTML = renderAdmin(state.profile); wireAdmin(); break;
@@ -118,8 +121,170 @@ function buildConfig(mode, opts = {}) {
 
 function startMode(mode) {
   if (mode === "custom") { navTo("custom"); return; }
+  if (mode === "versus") { startVersus(); return; }
   state.pending = buildConfig(mode);
   showMicPanel();
+}
+
+// ---------------------------------------------------------------------------
+// In-app modals (prompt/confirm are blocked in sandboxed iframes)
+// ---------------------------------------------------------------------------
+function confirmModal(msg, onYes, { danger = false } = {}) {
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.innerHTML = `
+    <div class="modal">
+      <div class="modal-note" style="font-size:14px;color:var(--text)">${msg}</div>
+      <div class="row" style="justify-content:flex-end;margin-top:18px">
+        <button class="btn ghost" data-no>Cancel</button>
+        <button class="btn" data-yes ${danger ? 'style="background:var(--bad)"' : ""}>Confirm</button>
+      </div>
+    </div>`;
+  document.body.appendChild(back);
+  back.addEventListener("click", (e) => {
+    if (e.target === back || e.target.closest("[data-no]")) { back.remove(); return; }
+    if (e.target.closest("[data-yes]")) { back.remove(); onYes(); }
+  });
+}
+
+function passcodeModal(onOk) {
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.innerHTML = `
+    <div class="modal">
+      <h3>🛠️ Developer Access</h3>
+      <div class="modal-note">Enter the developer passcode to unlock the admin panel.</div>
+      <input type="password" class="text-input" id="pc-input" placeholder="Passcode" autocomplete="off" />
+      <div class="row" style="justify-content:flex-end;margin-top:16px">
+        <button class="btn ghost" data-no>Cancel</button>
+        <button class="btn" id="pc-ok">Unlock</button>
+      </div>
+    </div>`;
+  document.body.appendChild(back);
+  const input = back.querySelector("#pc-input");
+  input.focus();
+  const submit = () => { const v = input.value; back.remove(); onOk(v); };
+  back.querySelector("#pc-ok").addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  back.addEventListener("click", (e) => { if (e.target === back || e.target.closest("[data-no]")) back.remove(); });
+}
+
+// ---------------------------------------------------------------------------
+// 8-bit overworld
+// ---------------------------------------------------------------------------
+function wireWorld8Bit() {
+  const canvas = $("#world8-canvas");
+  if (!canvas) return;
+  state.world8 = new World8Bit(canvas, state.profile, BOSSES, (bossIndex) => {
+    // encounter → open the boss battle
+    if (state.world8) { state.world8.destroy(); state.world8 = null; }
+    state.sfx.go();
+    startBoss(bossIndex);
+  });
+  // Touch D-pad
+  const dpad = $("#dpad");
+  if (dpad) {
+    const setDir = (dir, on) => {
+      const v = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[dir] || [0, 0];
+      state._dpad = state._dpad || { x: 0, y: 0 };
+      if (dir === "up" || dir === "down") state._dpad.y = on ? v[1] : 0;
+      if (dir === "left" || dir === "right") state._dpad.x = on ? v[0] : 0;
+      if (state.world8) state.world8.setTouch(state._dpad.x, state._dpad.y);
+    };
+    dpad.querySelectorAll(".dpad-btn").forEach((b) => {
+      const d = b.dataset.dir;
+      b.addEventListener("pointerdown", (e) => { e.preventDefault(); setDir(d, true); });
+      b.addEventListener("pointerup", () => setDir(d, false));
+      b.addEventListener("pointerleave", () => setDir(d, false));
+      b.addEventListener("pointercancel", () => setDir(d, false));
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Versus — local 2-player (keyboard + tap)
+// ---------------------------------------------------------------------------
+function startVersus() {
+  app.innerHTML = renderVersus(state.profile);
+  refreshHud();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  $("#arena-quit").addEventListener("click", () => { state.sfx.click(); navTo("lobby"); });
+
+  runCountdown(() => {
+    const V = {
+      tug: 50, p1combo: 0, p2combo: 0, p1last: 0, p2last: 0,
+      running: true, endAt: performance.now() + 45000, raf: null,
+      stop() { this.running = false; if (this.raf) cancelAnimationFrame(this.raf); },
+    };
+    state.versus = V;
+    const you = $("#clash-you"), foe = $("#clash-foe"), bolt = $("#clash-bolt");
+    const youPct = $("#you-pct"), foePct = $("#foe-pct"), timer = $("#timer-text");
+    const eff = effectById(state.profile.equippedAura);
+
+    const push = (who) => {
+      if (!V.running) return;
+      const now = performance.now();
+      if (who === 1) { V.p1combo = now - V.p1last < 250 ? V.p1combo + 1 : 0; V.p1last = now; }
+      else { V.p2combo = now - V.p2last < 250 ? V.p2combo + 1 : 0; V.p2last = now; }
+      const amt = 1.3 * (1 + Math.min(20, who === 1 ? V.p1combo : V.p2combo) * 0.03);
+      V.tug += who === 1 ? amt : -amt;
+      V.tug = Math.max(0, Math.min(100, V.tug));
+      state.sfx.aura(eff.sfx, who === 1 ? V.p1combo : V.p2combo);
+      const el = who === 1 ? $("#vs-p1") : $("#vs-p2");
+      if (el) { el.classList.add("hit"); setTimeout(() => el.classList.remove("hit"), 80); }
+      if (V.tug >= 100) return endVersus(V, 1);
+      if (V.tug <= 0) return endVersus(V, 2);
+    };
+
+    V.key = (e) => {
+      if (e.repeat) return;
+      if (e.code === "KeyA") { e.preventDefault(); push(1); }
+      else if (e.code === "KeyL") { e.preventDefault(); push(2); }
+    };
+    addEventListener("keydown", V.key);
+    $("#vs-p1").addEventListener("pointerdown", (e) => { e.preventDefault(); push(1); });
+    $("#vs-p2").addEventListener("pointerdown", (e) => { e.preventDefault(); push(2); });
+
+    const loop = () => {
+      if (!V.running) return;
+      const remain = Math.max(0, V.endAt - performance.now());
+      timer.textContent = Math.ceil(remain / 1000);
+      you.style.width = V.tug + "%"; foe.style.width = (100 - V.tug) + "%";
+      bolt.style.left = V.tug + "%";
+      youPct.textContent = Math.round(V.tug); foePct.textContent = Math.round(100 - V.tug);
+      if (remain <= 0) return endVersus(V, V.tug >= 50 ? 1 : 2);
+      V.raf = requestAnimationFrame(loop);
+    };
+    loop();
+  });
+}
+
+function endVersus(V, winner) {
+  if (!V.running) return;
+  V.stop();
+  removeEventListener("keydown", V.key);
+  state.sfx.bossDown();
+  app.classList.add("shake");
+  setTimeout(() => app.classList.remove("shake"), 500);
+  const koEl = document.createElement("div");
+  koEl.className = "ko-flash";
+  koEl.innerHTML = `<div class="ko-text">PLAYER ${winner} WINS</div>`;
+  document.body.appendChild(koEl);
+  setTimeout(() => koEl.remove(), 1100);
+  setTimeout(() => {
+    state.versus = null;
+    app.innerHTML = `
+      <section class="screen results"><div class="res-card">
+        <div class="res-verdict win">PLAYER ${winner} WINS</div>
+        <div style="font-size:70px;margin:14px 0">${winner === 1 ? "🅰️" : "🇱"} 👑</div>
+        <div style="color:var(--text-dim);margin-bottom:18px">Local 2-player battle · ${winner === 1 ? "left" : "right"} side dominated the bar</div>
+        <div class="row" style="justify-content:center">
+          <button class="btn big" data-play="versus">🔁 Rematch</button>
+          <button class="btn ghost big" data-nav="lobby">🏠 Lobby</button>
+        </div>
+      </div></section>`;
+    refreshHud();
+  }, 1100);
 }
 
 function wireCustomSetup() {
@@ -205,26 +370,29 @@ function wireSettings() {
   });
 
   $("#reset-btn").addEventListener("click", () => {
-    if (!confirm("Reset ALL progress — rank, level, stats, achievements and history? This can't be undone.")) return;
-    state.profile = resetProfile();
-    state.clap.setSensitivity(state.profile.settings.sensitivity);
-    state.sfx.setEnabled(state.profile.settings.sfxOn);
-    toast("Progress reset — fresh start!", "🧼");
-    navTo("lobby");
+    confirmModal("Reset ALL progress — rank, level, stats, JC, achievements and history? This can't be undone.", () => {
+      state.profile = resetProfile();
+      state.clap.setSensitivity(state.profile.settings.sensitivity);
+      state.sfx.setEnabled(state.profile.settings.sfxOn);
+      applyTheme(state.profile.settings.theme);
+      toast("Progress reset — fresh start!", "🧼");
+      navTo("lobby");
+    }, { danger: true });
   });
 
   $("#admin-access").addEventListener("click", () => {
     if (state.profile.adminUnlocked) { navTo("admin"); return; }
-    const code = prompt("Developer passcode:");
-    if (code && code.trim().toUpperCase() === ADMIN_CODE) {
-      state.profile.adminUnlocked = true;
-      saveProfile(state.profile);
-      state.sfx.win();
-      toast("Admin access granted 🛠️", "🔓");
-      navTo("admin");
-    } else if (code !== null) {
-      toast("Wrong passcode", "🔒");
-    }
+    passcodeModal((code) => {
+      if (code && code.trim().toUpperCase() === ADMIN_CODE) {
+        state.profile.adminUnlocked = true;
+        saveProfile(state.profile);
+        state.sfx.win();
+        toast("Admin access granted 🛠️", "🔓");
+        navTo("admin");
+      } else if (code) {
+        toast("Wrong passcode", "🔒");
+      }
+    });
   });
 }
 
@@ -258,16 +426,28 @@ function wireLobby() {
 function wireShop() {
   app.addEventListener("click", shopClick);
   function shopClick(e) {
+    // Preview / test an effect right where you're standing (no purchase).
+    const tryEl = e.target.closest("[data-try]");
+    if (tryEl && (e.target.closest(".aura-preview") || e.target.closest(".aura-swatch"))) {
+      e.stopPropagation();
+      const eff = effectById(tryEl.dataset.try);
+      const r = tryEl.getBoundingClientRect();
+      for (let i = 0; i < 3; i++) setTimeout(() => {
+        state.fx.burst(r.left + r.width / 2, r.top + r.height / 2 + 20, eff, 1, 12);
+        state.sfx.aura(eff.sfx, 12);
+      }, i * 140);
+      return;
+    }
     const buy = e.target.closest("[data-buy]");
     if (buy) {
-      const aura = auraById(buy.dataset.buy);
-      if (aura.tier === "premium" && !state.profile.premium) { toast("Premium required", "★"); return; }
-      if (!spendJc(state.profile, aura.price)) { toast(`Not enough JC — need ${aura.price.toLocaleString()}`, "🪙"); return; }
-      state.profile.ownedAuras.push(aura.id);
-      state.profile.equippedAura = aura.id;
+      const eff = effectById(buy.dataset.buy);
+      if (eff.rarity === "premium" && !state.profile.premium) { toast("Premium required", "★"); return; }
+      if (!spendJc(state.profile, eff.price)) { toast(`Not enough JC — need ${eff.price.toLocaleString()}`, "🪙"); return; }
+      state.profile.ownedAuras.push(eff.id);
+      state.profile.equippedAura = eff.id;
       saveProfile(state.profile);
       state.sfx.jcGain(); state.fx.coinRain(16);
-      toast(`${aura.name} unlocked & equipped!`, "🎨");
+      toast(`${eff.name} unlocked & equipped!`, "🎨");
       app.removeEventListener("click", shopClick);
       navTo("shop");
       return;
@@ -277,7 +457,7 @@ function wireShop() {
       state.profile.equippedAura = equip.dataset.equip;
       saveProfile(state.profile);
       state.sfx.click();
-      toast(`${auraById(equip.dataset.equip).name} equipped`, "🎨");
+      toast(`${effectById(equip.dataset.equip).name} equipped`, "🎨");
       app.removeEventListener("click", shopClick);
       navTo("shop");
       return;
@@ -386,7 +566,7 @@ function wireBossEvents(fight, cfg) {
   const cpsFill = $("#cps-fill");
   const cpsNow = $("#cps-now");
   const clapEmoji = $("#clap-emoji");
-  const aura = auraById(state.profile.equippedAura);
+  const aura = effectById(state.profile.equippedAura);
 
   fight.addEventListener("hit", (e) => {
     const d = e.detail;
@@ -491,11 +671,11 @@ function wireAdmin() {
   on("#adm-ach",      () => { p.achievements = ACHIEVEMENTS.map((a) => a.id); toast("All achievements unlocked", "🏅"); re(); });
   on("#adm-bosses",   () => { p.rpgBeaten = BOSSES.length; toast("All bosses unlocked/beaten", "🗺️"); re(); });
 
-  on("#adm-auras",   () => { p.ownedAuras = AURAS.map((a) => a.id); toast("Every aura unlocked", "🎨"); re(); });
+  on("#adm-auras",   () => { p.ownedAuras = EFFECTS.map((a) => a.id); toast("Every effect unlocked", "🎨"); re(); });
   on("#adm-dev",     () => { if (!p.ownedAuras.includes("dev")) p.ownedAuras.push("dev"); p.equippedAura = "dev"; toast("Developer Aura equipped", "👨‍💻"); re(); });
   on("#adm-susanoo", () => { if (!p.ownedAuras.includes("susanoo")) p.ownedAuras.push("susanoo"); p.equippedAura = "susanoo"; state.fx.guardianFlash(); toast("Spectral Guardian equipped", "👹"); re(); });
   on("#adm-guardian", () => { state.fx.guardianFlash(); state.sfx.aura("boom"); });
-  on("#adm-burst",   () => { const a = auraById(p.equippedAura); state.fx.burst(innerWidth / 2, innerHeight / 2, a, 1, 20); state.sfx.aura(a.sfx, 20); });
+  on("#adm-burst",   () => { const a = effectById(p.equippedAura); state.fx.burst(innerWidth / 2, innerHeight / 2, a, 1, 20); state.sfx.aura(a.sfx, 20); });
   on("#adm-premium", () => { p.premium = !p.premium; toast(p.premium ? "Premium granted" : "Premium revoked", "★"); re(); });
 
   on("#adm-god",      () => { p.godClap = !p.godClap; toast(`God Clap ${p.godClap ? "ON — 10× boss damage" : "OFF"}`, "🙏"); re(); });
@@ -504,13 +684,14 @@ function wireAdmin() {
   on("#adm-history",  () => { p.history = []; toast("History cleared", "🧹"); re(); });
   on("#adm-hype",     () => { toast("GODLIKE 👑", "🔥"); state.sfx.unlock(); });
   on("#adm-reset",    () => {
-    if (!confirm("FULL RESET — wipe rank, level, JC, gems, auras, bosses, everything?")) return;
-    state.profile = resetProfile();
-    state.clap.setSensitivity(state.profile.settings.sensitivity);
-    state.sfx.setEnabled(state.profile.settings.sfxOn);
-    applyTheme(state.profile.settings.theme);
-    toast("Everything wiped. Clean slate.", "💣");
-    navTo("lobby");
+    confirmModal("FULL RESET — wipe rank, level, JC, gems, effects, bosses, everything?", () => {
+      state.profile = resetProfile();
+      state.clap.setSensitivity(state.profile.settings.sensitivity);
+      state.sfx.setEnabled(state.profile.settings.sfxOn);
+      applyTheme(state.profile.settings.theme);
+      toast("Everything wiped. Clean slate.", "💣");
+      navTo("lobby");
+    }, { danger: true });
   });
   on("#adm-lock", () => { p.adminUnlocked = false; saveProfile(p); toast("Admin panel locked", "🔒"); navTo("lobby"); });
 }
@@ -570,21 +751,34 @@ function showMicPanel() {
 // ---------------------------------------------------------------------------
 // Keyboard / touch input
 // ---------------------------------------------------------------------------
-// Mouse clicks NEVER register claps (anti-autoclicker). Space is the
-// no-mic fallback; touch taps count only where allowed (casual modes).
+// KEYBOARD MODE is deliberately different from clapping: you "clap" by
+// ALTERNATING F and J like two hands — mashing one key does nothing. Mouse
+// clicks never count (anti-autoclicker). Touch taps (two fingers) count in
+// casual modes only.
 function attachKeyboard(allowTouch = false, clapFn = doClap) {
   detachKeyboard();
+  let lastKey = null;
   const handler = (e) => {
     if (e.repeat) return;
-    if (e.code === "Space" || e.code === "Enter") { e.preventDefault(); clapFn(1); }
+    if (e.code === "KeyF" || e.code === "KeyJ") {
+      e.preventDefault();
+      if (e.code !== lastKey) { lastKey = e.code; clapFn(1); }   // must alternate
+    } else if (e.code === "Space") {
+      // single-key fallback, slightly weaker so alternation stays best
+      e.preventDefault(); clapFn(0.75);
+    }
   };
   state.keyHandler = handler;
   window.addEventListener("keydown", handler);
   if (allowTouch) {
+    let lastSide = null;
     state.tapHandler = (e) => {
       if (e.pointerType === "mouse") return;   // clicking doesn't count
       if (e.target.closest("#arena-quit")) return;
-      if (e.target.closest(".clap-stage") || e.target.closest(".arena")) clapFn(1);
+      if (!(e.target.closest(".clap-stage") || e.target.closest(".arena"))) return;
+      // Two-finger alternation: tapping alternating sides of the screen.
+      const side = e.clientX < window.innerWidth / 2 ? "L" : "R";
+      if (side !== lastSide) { lastSide = side; clapFn(1); } else clapFn(0.75);
     };
     app.addEventListener("pointerdown", state.tapHandler);
   }
@@ -654,7 +848,7 @@ function runCountdown(done) {
   overlay.className = "countdown";
   const hint = state.inputMode === "mic" && state.micReady
     ? "👏 Clap when it says GO"
-    : "⌨️ Press SPACE or tap fast when it says GO";
+    : "⌨️ Alternate F and J (two hands!) — or tap left/right — when it says GO";
   overlay.innerHTML = `<div class="cd-num">3</div><div class="cd-hint">${hint}</div>`;
   document.body.appendChild(overlay);
   const num = $(".cd-num", overlay);
@@ -697,7 +891,7 @@ function wireMatchEvents(match, cfg) {
   ];
   let hypeIdx = 0;
 
-  const aura = auraById(state.profile.equippedAura);
+  const aura = effectById(state.profile.equippedAura);
 
   match.addEventListener("clap", (e) => {
     const { score, mult, strength, combo } = e.detail;

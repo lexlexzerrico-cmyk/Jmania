@@ -1,0 +1,401 @@
+/* ============================================================
+   JERKMANIA — AI Clap Speed Arena
+   Design system + screens
+   ============================================================ */
+
+:root {
+  /* Palette */
+  --bg-0: #08050f;
+  --bg-1: #0d0819;
+  --bg-2: #140c26;
+  --panel: rgba(24, 16, 43, 0.55);
+  --panel-solid: #17102a;
+  --stroke: rgba(150, 110, 255, 0.18);
+  --stroke-strong: rgba(160, 120, 255, 0.42);
+
+  --text: #f2ecff;
+  --text-dim: #b6a9d9;
+  --text-faint: #7d6fa6;
+
+  --accent: #b14dff;   /* violet */
+  --accent-2: #ff3d7f; /* pink   */
+  --accent-3: #22e0d6; /* cyan   */
+  --gold: #ffd05a;
+  --good: #3ee08a;
+  --bad: #ff5b6e;
+
+  --grad-hot: linear-gradient(135deg, #ff3d7f 0%, #b14dff 55%, #6a5bff 100%);
+  --grad-cyan: linear-gradient(135deg, #22e0d6 0%, #6a5bff 100%);
+  --glow-accent: 0 0 40px rgba(177, 77, 255, 0.45);
+
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 24px;
+  --r-xl: 34px;
+
+  --shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.75);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --font: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Chakra+Petch:wght@600;700&display=swap");
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg-0);
+  overflow-x: hidden;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+
+.display { font-family: "Chakra Petch", var(--font); letter-spacing: 0.5px; }
+
+/* ============================================================
+   Animated background
+   ============================================================ */
+.bg-layer { position: fixed; inset: 0; z-index: -2; overflow: hidden; background:
+    radial-gradient(1200px 800px at 15% -10%, #1c0f38 0%, transparent 60%),
+    radial-gradient(1000px 700px at 100% 0%, #24123f 0%, transparent 55%),
+    linear-gradient(160deg, var(--bg-0), var(--bg-1) 60%, #0b0716); }
+
+.bg-orb { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.5; animation: float 18s var(--ease) infinite alternate; }
+.orb-1 { width: 460px; height: 460px; background: #7b2dff; top: -80px; left: -60px; }
+.orb-2 { width: 520px; height: 520px; background: #ff2d7a; bottom: -160px; right: -80px; animation-delay: -6s; }
+.orb-3 { width: 380px; height: 380px; background: #17c9c9; top: 40%; left: 55%; animation-delay: -11s; opacity: 0.35; }
+
+@keyframes float {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(60px, -40px) scale(1.15); }
+}
+
+.bg-grid {
+  position: absolute; inset: -2px;
+  background-image:
+    linear-gradient(rgba(150,110,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(150,110,255,0.05) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(circle at 50% 30%, #000 0%, transparent 78%);
+}
+
+#particle-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* ============================================================
+   Top bar
+   ============================================================ */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 18px; padding: 14px clamp(16px, 4vw, 40px);
+  backdrop-filter: blur(14px);
+  background: linear-gradient(180deg, rgba(10,6,20,0.75), rgba(10,6,20,0.15));
+  border-bottom: 1px solid var(--stroke);
+}
+
+.brand { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; transition: transform 0.2s var(--ease); }
+.brand:hover { transform: translateY(-1px); }
+.brand-mark { font-size: 26px; filter: drop-shadow(0 0 10px rgba(177,77,255,0.6)); animation: clapWiggle 3.5s ease-in-out infinite; }
+@keyframes clapWiggle { 0%,92%,100%{transform:rotate(0)} 94%{transform:rotate(-16deg)} 96%{transform:rotate(14deg)} 98%{transform:rotate(-8deg)} }
+.brand-name { font-family: "Chakra Petch"; font-weight: 700; font-size: 22px; letter-spacing: 1px; }
+.brand-name .accent { background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+.profile-hud { display: flex; align-items: center; gap: 14px; }
+
+.hud-level {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 14px 6px 6px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px);
+}
+.hud-level .lvl-badge {
+  width: 38px; height: 38px; display: grid; place-items: center;
+  border-radius: 50%; font-weight: 700; font-family: "Chakra Petch";
+  background: var(--grad-hot); box-shadow: var(--glow-accent); font-size: 15px;
+}
+.hud-level .lvl-meta { display: flex; flex-direction: column; line-height: 1.1; }
+.hud-level .lvl-name { font-weight: 600; font-size: 13px; }
+.hud-level .lvl-xp { font-size: 11px; color: var(--text-faint); }
+
+.hud-rank {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 16px 6px 8px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px);
+}
+.hud-rank .rank-emblem { font-size: 22px; line-height: 1; }
+.hud-rank .rank-meta { display: flex; flex-direction: column; line-height: 1.15; }
+.hud-rank .rank-name { font-weight: 600; font-size: 13px; }
+.hud-rank .rank-rr { font-size: 11px; color: var(--text-faint); }
+
+@media (max-width: 720px) {
+  .hud-level .lvl-meta, .hud-rank .rank-meta { display: none; }
+  .brand-name { font-size: 18px; }
+}
+
+/* ============================================================
+   Layout / app
+   ============================================================ */
+.app { max-width: 1180px; margin: 0 auto; padding: clamp(20px, 4vw, 46px) clamp(16px, 4vw, 40px) 120px; }
+
+.screen { animation: screenIn 0.5s var(--ease) both; }
+@keyframes screenIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+.section-title { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+.section-title h2 { font-family: "Chakra Petch"; font-size: clamp(22px, 3vw, 30px); font-weight: 700; }
+.section-title .sub { color: var(--text-faint); font-size: 14px; }
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn {
+  --b: var(--grad-hot);
+  font-family: var(--font); font-weight: 600; font-size: 15px;
+  color: white; border: none; cursor: pointer;
+  padding: 13px 24px; border-radius: var(--r-md);
+  background: var(--b); position: relative; overflow: hidden;
+  transition: transform 0.15s var(--ease), box-shadow 0.2s var(--ease), filter 0.2s;
+  box-shadow: 0 10px 26px -10px rgba(177,77,255,0.7);
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 16px 34px -10px rgba(177,77,255,0.9); filter: brightness(1.05); }
+.btn:active { transform: translateY(0) scale(0.98); }
+.btn.ghost { background: var(--panel); border: 1px solid var(--stroke-strong); box-shadow: none; color: var(--text); backdrop-filter: blur(8px); }
+.btn.ghost:hover { border-color: var(--accent); box-shadow: var(--glow-accent); }
+.btn.cyan { --b: var(--grad-cyan); box-shadow: 0 10px 26px -10px rgba(34,224,214,0.6); }
+.btn.big { padding: 17px 34px; font-size: 17px; border-radius: var(--r-lg); }
+.btn.wide { width: 100%; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; filter: grayscale(0.4); }
+
+/* ============================================================
+   Lobby
+   ============================================================ */
+.hero {
+  position: relative; padding: clamp(28px, 5vw, 56px); border-radius: var(--r-xl);
+  background:
+    radial-gradient(700px 300px at 85% -20%, rgba(255,61,127,0.22), transparent 60%),
+    var(--panel);
+  border: 1px solid var(--stroke); backdrop-filter: blur(16px);
+  box-shadow: var(--shadow); overflow: hidden; margin-bottom: 30px;
+}
+.hero::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(500px 200px at 10% 120%, rgba(34,224,214,0.16), transparent 60%);
+}
+.hero .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--accent-3); background: rgba(34,224,214,0.1); border: 1px solid rgba(34,224,214,0.25); padding: 6px 12px; border-radius: 999px; margin-bottom: 18px; }
+.hero h1 { font-family: "Chakra Petch"; font-size: clamp(34px, 7vw, 62px); line-height: 1; font-weight: 700; margin-bottom: 14px; }
+.hero h1 .g { background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero p.lead { color: var(--text-dim); font-size: clamp(15px, 2vw, 18px); max-width: 560px; margin-bottom: 26px; }
+.hero .hero-cta { display: flex; gap: 14px; flex-wrap: wrap; }
+
+.mode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+
+.mode-card {
+  position: relative; padding: 22px; border-radius: var(--r-lg);
+  background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(12px);
+  cursor: pointer; overflow: hidden; transition: transform 0.25s var(--ease), border-color 0.25s, box-shadow 0.25s;
+  min-height: 176px; display: flex; flex-direction: column;
+}
+.mode-card::before {
+  content: ""; position: absolute; inset: 0; opacity: 0; transition: opacity 0.3s;
+  background: radial-gradient(400px 200px at 50% -20%, var(--mc, rgba(177,77,255,0.28)), transparent 65%);
+}
+.mode-card:hover { transform: translateY(-5px); border-color: var(--stroke-strong); box-shadow: 0 26px 50px -24px rgba(0,0,0,0.8); }
+.mode-card:hover::before { opacity: 1; }
+.mode-card .mc-icon { font-size: 30px; margin-bottom: 12px; }
+.mode-card .mc-tag { position: absolute; top: 16px; right: 16px; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-faint); border: 1px solid var(--stroke); padding: 3px 8px; border-radius: 999px; }
+.mode-card h3 { font-family: "Chakra Petch"; font-size: 21px; margin-bottom: 6px; }
+.mode-card p { color: var(--text-dim); font-size: 13.5px; line-height: 1.5; flex: 1; }
+.mode-card .mc-go { margin-top: 12px; font-size: 13px; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+.mode-card .mc-go .arrow { transition: transform 0.2s; }
+.mode-card:hover .mc-go .arrow { transform: translateX(4px); }
+
+.mode-card.ranked  { --mc: rgba(255,61,127,0.3); }
+.mode-card.classic { --mc: rgba(34,224,214,0.28); }
+.mode-card.custom  { --mc: rgba(255,208,90,0.26); }
+.mode-card.duel    { --mc: rgba(106,91,255,0.32); }
+
+/* Stats strip */
+.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-top: 30px; }
+.stat-box { padding: 18px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); text-align: center; backdrop-filter: blur(10px); }
+.stat-box .v { font-family: "Chakra Petch"; font-size: 28px; font-weight: 700; background: var(--grad-cyan); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stat-box .l { font-size: 12px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+/* ============================================================
+   Match / arena
+   ============================================================ */
+.arena { text-align: center; }
+.arena-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.arena-top .mode-badge { font-family: "Chakra Petch"; font-size: 14px; letter-spacing: 1px; padding: 8px 16px; border-radius: 999px; background: var(--panel); border: 1px solid var(--stroke-strong); }
+
+.timer-ring { position: relative; width: 108px; height: 108px; }
+.timer-ring svg { transform: rotate(-90deg); }
+.timer-ring .t-text { position: absolute; inset: 0; display: grid; place-items: center; font-family: "Chakra Petch"; font-size: 30px; font-weight: 700; }
+
+.clap-stage {
+  position: relative; margin: 10px auto 6px; max-width: 640px;
+  padding: 40px 24px; border-radius: var(--r-xl);
+  background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(14px);
+  overflow: hidden;
+}
+.clap-emoji { font-size: clamp(80px, 18vw, 150px); line-height: 1; display: inline-block; filter: drop-shadow(0 0 30px rgba(177,77,255,0.5)); transition: transform 0.06s ease-out; }
+.clap-emoji.pulse { animation: clapHit 0.18s var(--ease); }
+@keyframes clapHit { 0%{transform:scale(1)} 40%{transform:scale(1.35) rotate(-6deg)} 100%{transform:scale(1)} }
+
+.score-huge { font-family: "Chakra Petch"; font-size: clamp(48px, 12vw, 92px); font-weight: 700; line-height: 1; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; transition: transform 0.08s; }
+.score-huge.bump { transform: scale(1.08); }
+.score-label { color: var(--text-faint); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+
+.combo-wrap { margin: 16px auto 0; max-width: 420px; }
+.combo-line { display: flex; align-items: baseline; justify-content: center; gap: 10px; }
+.combo-x { font-family: "Chakra Petch"; font-size: 34px; font-weight: 700; color: var(--gold); text-shadow: 0 0 18px rgba(255,208,90,0.5); transition: transform 0.1s; }
+.combo-x.bump { transform: scale(1.2); }
+.combo-txt { font-size: 13px; color: var(--text-dim); letter-spacing: 1px; }
+
+/* CPS meter */
+.cps-meter { margin: 18px auto 0; max-width: 460px; }
+.cps-track { height: 16px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid var(--stroke); overflow: hidden; position: relative; }
+.cps-fill { height: 100%; width: 0%; border-radius: 999px; background: var(--grad-cyan); transition: width 0.12s linear; box-shadow: 0 0 16px rgba(34,224,214,0.5); }
+.cps-fill.hot { background: var(--grad-hot); box-shadow: 0 0 20px rgba(255,61,127,0.6); }
+.cps-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-faint); margin-top: 8px; }
+.cps-now { font-family: "Chakra Petch"; font-size: 20px; color: var(--accent-3); }
+
+/* Live opponent (1v1) */
+.versus { display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; align-items: stretch; margin-bottom: 18px; }
+.vs-card { padding: 16px; border-radius: var(--r-lg); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px); }
+.vs-card.you { border-color: var(--stroke-strong); box-shadow: var(--glow-accent); }
+.vs-card .vs-name { font-family: "Chakra Petch"; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.vs-card .vs-score { font-family: "Chakra Petch"; font-size: 40px; font-weight: 700; margin-top: 4px; }
+.vs-card.you .vs-score { color: var(--accent-3); }
+.vs-card.foe .vs-score { color: var(--accent-2); }
+.vs-mid { display: grid; place-items: center; font-family: "Chakra Petch"; font-weight: 700; font-size: 22px; color: var(--text-faint); }
+.vs-bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); margin-top: 10px; overflow: hidden; }
+.vs-bar > i { display: block; height: 100%; border-radius: 999px; background: var(--grad-cyan); width: 0%; transition: width 0.2s; }
+.vs-card.foe .vs-bar > i { background: var(--grad-hot); }
+
+/* Countdown overlay */
+.countdown { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(6,3,14,0.82); backdrop-filter: blur(6px); }
+.countdown .cd-num { font-family: "Chakra Petch"; font-size: clamp(90px, 30vw, 220px); font-weight: 700; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; animation: cdPop 0.9s var(--ease); }
+@keyframes cdPop { 0%{transform:scale(0.4);opacity:0} 30%{transform:scale(1.1);opacity:1} 70%{transform:scale(1)} 100%{transform:scale(1.4);opacity:0} }
+.countdown .cd-hint { position: absolute; bottom: 14%; color: var(--text-dim); font-size: 15px; }
+
+/* Mic permission / calibration panel */
+.mic-panel { max-width: 520px; margin: 0 auto; text-align: center; padding: 34px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(14px); }
+.mic-panel .mic-icon { font-size: 54px; margin-bottom: 14px; filter: drop-shadow(0 0 18px rgba(34,224,214,0.5)); }
+.mic-panel h3 { font-family: "Chakra Petch"; font-size: 24px; margin-bottom: 10px; }
+.mic-panel p { color: var(--text-dim); font-size: 14.5px; line-height: 1.6; margin-bottom: 20px; }
+.mic-level { height: 12px; border-radius: 999px; background: rgba(255,255,255,0.06); overflow: hidden; margin: 16px 0; border: 1px solid var(--stroke); }
+.mic-level > i { display: block; height: 100%; width: 0%; background: var(--grad-cyan); border-radius: 999px; transition: width 0.06s; }
+.sens-row { display: flex; align-items: center; gap: 12px; margin: 18px 0 4px; }
+.sens-row label { font-size: 13px; color: var(--text-dim); white-space: nowrap; }
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.12); outline: none; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: var(--glow-accent); }
+input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none; border-radius: 50%; background: var(--accent); cursor: pointer; }
+.no-mic-note { font-size: 12px; color: var(--text-faint); margin-top: 14px; }
+
+/* ============================================================
+   Results screen
+   ============================================================ */
+.results { max-width: 640px; margin: 0 auto; text-align: center; }
+.results .res-card { padding: 36px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(14px); box-shadow: var(--shadow); }
+.res-verdict { font-family: "Chakra Petch"; font-size: clamp(30px, 6vw, 46px); font-weight: 700; margin-bottom: 6px; }
+.res-verdict.win { background: var(--grad-cyan); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.res-verdict.loss { color: var(--bad); }
+.res-score { font-family: "Chakra Petch"; font-size: clamp(56px, 14vw, 96px); font-weight: 700; background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; line-height: 1; margin: 6px 0 18px; }
+.res-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+.res-grid .rb { padding: 14px; border-radius: var(--r-md); background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); }
+.res-grid .rb .v { font-family: "Chakra Petch"; font-size: 24px; font-weight: 700; }
+.res-grid .rb .l { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+.reward-row { display: grid; gap: 12px; margin: 8px 0 22px; }
+.reward {
+  display: flex; align-items: center; gap: 14px; text-align: left;
+  padding: 14px 18px; border-radius: var(--r-md);
+  background: rgba(255,255,255,0.04); border: 1px solid var(--stroke);
+}
+.reward .r-ic { font-size: 24px; }
+.reward .r-body { flex: 1; }
+.reward .r-title { font-weight: 600; font-size: 14px; }
+.reward .r-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,0.08); margin-top: 8px; overflow: hidden; }
+.reward .r-bar > i { display: block; height: 100%; border-radius: 999px; width: 0%; transition: width 0.9s var(--ease); }
+.reward.xp .r-bar > i { background: var(--grad-hot); }
+.reward.rr .r-bar > i { background: var(--grad-cyan); }
+.reward .r-delta { font-family: "Chakra Petch"; font-weight: 700; font-size: 18px; }
+.reward .r-delta.up { color: var(--good); }
+.reward .r-delta.down { color: var(--bad); }
+
+/* ============================================================
+   Ranks / progression page
+   ============================================================ */
+.rank-hero { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; padding: 28px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(14px); margin-bottom: 26px; }
+.rank-emblem-big { font-size: 84px; line-height: 1; filter: drop-shadow(0 0 24px var(--rank-glow, rgba(177,77,255,0.5))); }
+.rank-hero .rh-info { flex: 1; min-width: 220px; }
+.rank-hero .rh-tier { font-family: "Chakra Petch"; font-size: 32px; font-weight: 700; }
+.rank-hero .rh-rr-track { height: 14px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid var(--stroke); overflow: hidden; margin: 12px 0 6px; }
+.rank-hero .rh-rr-track > i { display: block; height: 100%; border-radius: 999px; background: var(--grad-cyan); width: 0%; }
+.rank-hero .rh-rr-num { font-size: 13px; color: var(--text-dim); }
+
+.rank-ladder { display: grid; gap: 10px; }
+.rank-row { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); transition: transform 0.2s, border-color 0.2s; }
+.rank-row.current { border-color: var(--stroke-strong); box-shadow: var(--glow-accent); transform: scale(1.01); }
+.rank-row .rr-emblem { font-size: 30px; }
+.rank-row .rr-name { font-family: "Chakra Petch"; font-size: 17px; flex: 1; }
+.rank-row .rr-band { font-size: 12px; color: var(--text-faint); }
+
+/* ============================================================
+   Custom setup form
+   ============================================================ */
+.setup { max-width: 560px; margin: 0 auto; }
+.setup-card { padding: 28px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(14px); }
+.field { margin-bottom: 22px; }
+.field > label { display: block; font-size: 13px; color: var(--text-dim); margin-bottom: 10px; font-weight: 500; }
+.chip-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.chip { padding: 10px 18px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); cursor: pointer; font-size: 14px; transition: all 0.18s; }
+.chip:hover { border-color: var(--stroke-strong); }
+.chip.active { background: var(--grad-hot); border-color: transparent; font-weight: 600; box-shadow: 0 8px 20px -8px rgba(177,77,255,0.7); }
+.field .val-read { font-family: "Chakra Petch"; font-size: 22px; color: var(--accent-3); }
+
+/* ============================================================
+   Toasts
+   ============================================================ */
+.toast-host { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column; gap: 10px; align-items: center; pointer-events: none; }
+.toast { pointer-events: auto; padding: 12px 20px; border-radius: 999px; background: var(--panel-solid); border: 1px solid var(--stroke-strong); backdrop-filter: blur(10px); font-size: 14px; box-shadow: var(--shadow); animation: toastIn 0.35s var(--ease); display: flex; align-items: center; gap: 10px; }
+.toast .t-ic { font-size: 18px; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* ============================================================
+   Music toggle
+   ============================================================ */
+.music-toggle {
+  position: fixed; bottom: 22px; right: 22px; z-index: 50;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; border-radius: 999px; cursor: pointer;
+  background: var(--panel-solid); border: 1px solid var(--stroke-strong);
+  backdrop-filter: blur(10px); color: var(--text); font-family: var(--font);
+  box-shadow: var(--shadow); transition: transform 0.2s, box-shadow 0.2s;
+}
+.music-toggle:hover { transform: translateY(-2px); box-shadow: var(--glow-accent); }
+.music-toggle .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+.music-toggle .eq i { width: 3px; background: var(--accent-3); border-radius: 2px; height: 4px; }
+.music-toggle.playing .eq i { animation: eq 0.9s ease-in-out infinite; }
+.music-toggle .eq i:nth-child(1){animation-delay:0s} .music-toggle .eq i:nth-child(2){animation-delay:.15s} .music-toggle .eq i:nth-child(3){animation-delay:.3s} .music-toggle .eq i:nth-child(4){animation-delay:.45s}
+@keyframes eq { 0%,100%{height:4px} 50%{height:15px} }
+.music-toggle:not(.playing) .music-icon { opacity: 0.5; }
+
+/* ============================================================
+   Utility
+   ============================================================ */
+.row { display: flex; gap: 12px; flex-wrap: wrap; }
+.center { display: flex; justify-content: center; }
+.mt-24 { margin-top: 24px; }
+.hidden { display: none !important; }
+.flash { animation: flashBg 0.4s ease; }
+@keyframes flashBg { 0%{background: rgba(255,61,127,0.2)} 100%{background: transparent} }
+
+@media (max-width: 620px) {
+  .res-grid { grid-template-columns: 1fr 1fr; }
+  .versus { grid-template-columns: 1fr; }
+  .vs-mid { display: none; }
+}

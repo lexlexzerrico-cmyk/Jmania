@@ -83,8 +83,23 @@ export class FxEngine {
 
   burst(x, y, effect, strength = 1, combo = 0) {
     if (this.off) { this._wake(); return; }
-    const k = effect.kind;
+    let k = effect.kind;
     const n = 12 + Math.round(strength * 10) + Math.round(combo / 4);
+
+    // Heavy full-screen ultimates (blackhole/galaxy/chakra/bankai/domain) are
+    // throttled so rapid clapping doesn't spawn one per clap. Between ultimates
+    // a light themed spark burst plays instead, so every clap still reacts.
+    const HEAVY = { blackhole: 1, galaxy: 1, chakra: 1, bankai: 1, domain: 1 };
+    if (HEAVY[k]) {
+      const now = performance.now();
+      if (!this._specialCd) this._specialCd = {};
+      const cd = k === "bankai" ? 650 : 1050;
+      if (now - (this._specialCd[k] || 0) < cd) {
+        k = "spark";                       // fall through to a light burst
+      } else {
+        this._specialCd[k] = now;
+      }
+    }
 
     switch (k) {
       case "katana":
@@ -184,92 +199,117 @@ export class FxEngine {
   }
 
   // ---- ANIMATED SUSANOO: materialize → sword swing → fade (2.2s) ----------
+  // Full-screen tinted vignette used to darken the arena behind an ultimate.
+  _screenVignette(fade, inner, outer) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = outer; ctx.fillRect(0, 0, innerWidth, innerHeight);
+    const g = ctx.createRadialGradient(innerWidth / 2, innerHeight / 2, 0, innerWidth / 2, innerHeight / 2, Math.max(innerWidth, innerHeight) * 0.7);
+    g.addColorStop(0, inner); g.addColorStop(1, outer);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, innerWidth, innerHeight);
+    ctx.restore();
+  }
+
+  // ===================== SUSANOO — spectral demon + warrior =====================
   _drawGuardian(t) {  // t: 0→1 across the whole animation
     const ctx = this.ctx;
-    const cx = innerWidth / 2, base = innerHeight * 0.92;
-    const s = Math.min(innerWidth, innerHeight) * 0.62;
-    // phases: 0-.25 materialize, .25-.6 idle+charge, .6-.75 SWING, .75-1 fade
-    const alpha = t < 0.25 ? t / 0.25 * 0.55 : t < 0.75 ? 0.55 : (1 - t) / 0.25 * 0.55;
-    const flick = 1 + Math.sin(t * 40) * 0.015;
-    // sword angle: raised → big arc swing
-    let swordA = -1.15;
-    if (t >= 0.6 && t < 0.75) swordA = -1.15 + ((t - 0.6) / 0.15) * 2.1;
-    else if (t >= 0.75) swordA = 0.95;
+    const W = innerWidth, H = innerHeight;
+    const cx = W / 2, base = H * 0.98;
+    const s = Math.min(W, H) * 0.7;
+    // phases: 0-.2 rise, .2-.6 loom, .6-.72 SWING, .72-1 fade
+    const fade = t < 0.2 ? t / 0.2 : t > 0.78 ? (1 - t) / 0.22 : 1;
+    const a = Math.max(0, fade);
 
+    // 1) Darken the whole arena to a purple void
+    this._screenVignette(a * 0.82, "rgba(28,10,52,0.4)", "rgba(6,2,16,0.96)");
+
+    // 2) Colossal spectral FACE looming in the upper screen (glowing eyes + grin)
+    const fy = H * 0.34;
+    const grin = Math.min(1, Math.max(0, (t - 0.15) / 0.4)); // grin widens as it looms
     ctx.save();
-    ctx.globalAlpha = Math.max(0, alpha);
-    ctx.translate(cx, base);
-    ctx.scale(flick, flick);
-
-    // aura glow
-    const glow = ctx.createRadialGradient(0, -s * 0.5, s * 0.1, 0, -s * 0.5, s * 0.9);
-    glow.addColorStop(0, "rgba(127,176,255,0.35)"); glow.addColorStop(1, "rgba(127,176,255,0)");
-    ctx.fillStyle = glow; ctx.fillRect(-s, -s * 1.5, s * 2, s * 1.6);
-
-    // body gradient
-    const g = ctx.createLinearGradient(0, -s * 1.4, 0, 0);
-    g.addColorStop(0, "#8fc0ff"); g.addColorStop(0.5, "#b14dff"); g.addColorStop(1, "rgba(34,224,214,0.05)");
-
-    // layered armor torso
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.44, 0); ctx.lineTo(-s * 0.52, -s * 0.55);
-    ctx.lineTo(-s * 0.34, -s * 0.72); ctx.lineTo(-s * 0.4, -s * 0.9);   // left pauldron spike
-    ctx.lineTo(-s * 0.2, -s * 0.8);
-    ctx.lineTo(-s * 0.24, -s * 1.1); ctx.lineTo(-s * 0.1, -s * 0.9);    // left horn
-    ctx.lineTo(0, -s * 1.02);                                            // crest
-    ctx.lineTo(s * 0.1, -s * 0.9); ctx.lineTo(s * 0.24, -s * 1.1);      // right horn
-    ctx.lineTo(s * 0.2, -s * 0.8);
-    ctx.lineTo(s * 0.4, -s * 0.9); ctx.lineTo(s * 0.34, -s * 0.72);     // right pauldron
-    ctx.lineTo(s * 0.52, -s * 0.55); ctx.lineTo(s * 0.44, 0);
-    ctx.closePath(); ctx.fill();
-
-    // chest plates (detail lines)
-    ctx.strokeStyle = "rgba(220,240,255,0.5)"; ctx.lineWidth = s * 0.012;
-    ctx.beginPath(); ctx.moveTo(-s * 0.3, -s * 0.5); ctx.lineTo(0, -s * 0.4); ctx.lineTo(s * 0.3, -s * 0.5); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-s * 0.26, -s * 0.32); ctx.lineTo(0, -s * 0.24); ctx.lineTo(s * 0.26, -s * 0.32); ctx.stroke();
-
-    // face mask + glowing eyes
-    ctx.fillStyle = "#1a1040";
-    ctx.beginPath(); ctx.moveTo(-s * 0.1, -s * 0.86); ctx.lineTo(s * 0.1, -s * 0.86); ctx.lineTo(s * 0.07, -s * 0.72); ctx.lineTo(-s * 0.07, -s * 0.72); ctx.closePath(); ctx.fill();
-    const eyeGlow = 0.6 + Math.sin(t * 25) * 0.4;
-    ctx.fillStyle = `rgba(34,224,214,${eyeGlow})`;
-    ctx.beginPath(); ctx.arc(-s * 0.045, -s * 0.79, s * 0.018, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(s * 0.045, -s * 0.79, s * 0.018, 0, 7); ctx.fill();
-
-    // sword arm + blade (animated swing)
-    ctx.save();
-    ctx.translate(s * 0.42, -s * 0.6);
-    ctx.rotate(swordA);
-    ctx.strokeStyle = "rgba(200,225,255,0.9)"; ctx.lineWidth = s * 0.045; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(s * 0.22, 0); ctx.stroke();     // arm
-    const bg = ctx.createLinearGradient(s * 0.22, 0, s * 0.95, 0);
-    bg.addColorStop(0, "#eaf6ff"); bg.addColorStop(1, "rgba(127,176,255,0.1)");
-    ctx.fillStyle = bg;
-    ctx.beginPath();
-    ctx.moveTo(s * 0.22, -s * 0.035); ctx.lineTo(s * 0.95, -s * 0.012);
-    ctx.lineTo(s * 1.0, 0); ctx.lineTo(s * 0.95, s * 0.012); ctx.lineTo(s * 0.22, s * 0.035);
-    ctx.closePath(); ctx.fill();
-    ctx.restore();
-
-    // swing trail during the swing phase
-    if (t >= 0.6 && t < 0.8) {
-      const p = (t - 0.6) / 0.2;
-      ctx.strokeStyle = `rgba(180,220,255,${0.5 * (1 - p)})`;
-      ctx.lineWidth = s * 0.05;
+    ctx.globalAlpha = a;
+    // hazy purple face haze (drawn as vertical energy streaks)
+    ctx.strokeStyle = "rgba(120,70,190,0.10)";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 40; i++) {
+      const x = (i / 40) * W;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + Math.sin(i * 1.3 + t * 6) * 30, H * 0.7); ctx.stroke();
+    }
+    // eyes (two big glowing crescents)
+    const eyeR = s * 0.19, eyeGap = s * 0.42, eyeGlow = 0.7 + Math.sin(t * 30) * 0.3;
+    for (const dir of [-1, 1]) {
+      const ex = cx + dir * eyeGap, ey = fy;
+      const gg = ctx.createRadialGradient(ex, ey, 2, ex, ey, eyeR * 1.6);
+      gg.addColorStop(0, `rgba(240,250,255,${eyeGlow})`); gg.addColorStop(0.5, "rgba(180,210,255,0.35)"); gg.addColorStop(1, "rgba(140,120,255,0)");
+      ctx.fillStyle = gg;
       ctx.beginPath();
-      ctx.arc(s * 0.42, -s * 0.6, s * 0.85, -1.15, -1.15 + 2.1 * Math.min(1, p * 1.3));
-      ctx.stroke();
+      ctx.ellipse(ex, ey, eyeR, eyeR * 0.62, dir * 0.25, 0, 7); ctx.fill();
+      // slit pupil
+      ctx.fillStyle = "rgba(20,6,40,0.9)";
+      ctx.beginPath(); ctx.ellipse(ex, ey, eyeR * 0.14, eyeR * 0.5, dir * 0.25, 0, 7); ctx.fill();
+    }
+    // wide glowing grin
+    const gy = fy + s * 0.42, gw = s * (0.28 + grin * 0.34);
+    const gm = ctx.createLinearGradient(cx - gw, gy, cx + gw, gy);
+    gm.addColorStop(0, "rgba(180,210,255,0)"); gm.addColorStop(0.5, `rgba(230,245,255,${0.85 * grin})`); gm.addColorStop(1, "rgba(180,210,255,0)");
+    ctx.strokeStyle = gm; ctx.lineWidth = s * 0.03; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(cx - gw, gy - s * 0.05); ctx.quadraticCurveTo(cx, gy + s * 0.16, cx + gw, gy - s * 0.05); ctx.stroke();
+    // teeth notches
+    ctx.strokeStyle = `rgba(20,6,40,${0.7 * grin})`; ctx.lineWidth = 3;
+    for (let i = 1; i < 7; i++) { const fx = cx - gw + (i / 7) * gw * 2; const off = Math.sin((i / 7) * Math.PI) * s * 0.12; ctx.beginPath(); ctx.moveTo(fx, gy - s * 0.02); ctx.lineTo(fx, gy + off * 0.6); ctx.stroke(); }
+    ctx.restore();
+
+    // 3) Armored warrior silhouette at the bottom, with a rising blade swing
+    let swordA = -1.2;
+    if (t >= 0.6 && t < 0.72) swordA = -1.2 + ((t - 0.6) / 0.12) * 2.2;
+    else if (t >= 0.72) swordA = 1.0;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(cx, base);
+    // aura
+    const glow = ctx.createRadialGradient(0, -s * 0.5, s * 0.05, 0, -s * 0.5, s * 0.9);
+    glow.addColorStop(0, "rgba(150,120,255,0.4)"); glow.addColorStop(1, "rgba(150,120,255,0)");
+    ctx.fillStyle = glow; ctx.fillRect(-s, -s * 1.4, s * 2, s * 1.5);
+    const bodyG = ctx.createLinearGradient(0, -s * 1.2, 0, 0);
+    bodyG.addColorStop(0, "#a9c4ff"); bodyG.addColorStop(0.5, "#7b3dff"); bodyG.addColorStop(1, "rgba(34,224,214,0.03)");
+    ctx.fillStyle = bodyG;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.4, 0); ctx.lineTo(-s * 0.48, -s * 0.5);
+    ctx.lineTo(-s * 0.3, -s * 0.66); ctx.lineTo(-s * 0.36, -s * 0.86);
+    ctx.lineTo(-s * 0.18, -s * 0.74); ctx.lineTo(-s * 0.22, -s * 1.02);
+    ctx.lineTo(-s * 0.08, -s * 0.84); ctx.lineTo(0, -s * 0.96);
+    ctx.lineTo(s * 0.08, -s * 0.84); ctx.lineTo(s * 0.22, -s * 1.02);
+    ctx.lineTo(s * 0.18, -s * 0.74); ctx.lineTo(s * 0.36, -s * 0.86);
+    ctx.lineTo(s * 0.3, -s * 0.66); ctx.lineTo(s * 0.48, -s * 0.5);
+    ctx.lineTo(s * 0.4, 0); ctx.closePath(); ctx.fill();
+    // armor lines
+    ctx.strokeStyle = "rgba(220,235,255,0.45)"; ctx.lineWidth = s * 0.01;
+    ctx.beginPath(); ctx.moveTo(-s * 0.26, -s * 0.46); ctx.lineTo(0, -s * 0.36); ctx.lineTo(s * 0.26, -s * 0.46); ctx.stroke();
+    // sword
+    ctx.save(); ctx.translate(s * 0.4, -s * 0.55); ctx.rotate(swordA);
+    ctx.strokeStyle = "rgba(210,230,255,0.9)"; ctx.lineWidth = s * 0.04; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(s * 0.2, 0); ctx.stroke();
+    const blade = ctx.createLinearGradient(s * 0.2, 0, s * 1.05, 0);
+    blade.addColorStop(0, "#eaf6ff"); blade.addColorStop(1, "rgba(150,120,255,0.1)");
+    ctx.fillStyle = blade;
+    ctx.beginPath(); ctx.moveTo(s * 0.2, -s * 0.03); ctx.lineTo(s * 1.05, -s * 0.008); ctx.lineTo(s * 1.1, 0); ctx.lineTo(s * 1.05, s * 0.008); ctx.lineTo(s * 0.2, s * 0.03); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // swing trail
+    if (t >= 0.6 && t < 0.82) {
+      const pp = (t - 0.6) / 0.22;
+      ctx.strokeStyle = `rgba(200,220,255,${0.6 * (1 - pp)})`; ctx.lineWidth = s * 0.06;
+      ctx.beginPath(); ctx.arc(s * 0.4, -s * 0.55, s * 0.95, -1.2, -1.2 + 2.2 * Math.min(1, pp * 1.3)); ctx.stroke();
     }
     ctx.restore();
 
-    // rising spirit flames around the guardian
-    if (Math.random() < 0.6) {
-      this._spawn(cx + rnd(-s * 0.5, s * 0.5), base - rnd(0, s * 0.4), {
-        vx: rnd(-0.5, 0.5), vy: rnd(-4, -2), size: rnd(4, 9) * SCALE * 0.7,
-        color: ["#7fb0ff", "#b14dff", "#22e0d6"][Math.floor(rnd(0, 3))], shape: "flame", grav: -0.05, decay: 0.03,
-      });
-    }
+    // rising spirit embers
+    if (Math.random() < 0.7) this._spawn(cx + rnd(-s * 0.6, s * 0.6), base - rnd(0, s * 0.5), {
+      vx: rnd(-0.6, 0.6), vy: rnd(-4.5, -2), size: rnd(4, 9) * SCALE * 0.7,
+      color: ["#a9c4ff", "#b14dff", "#22e0d6"][Math.floor(rnd(0, 3))], shape: "flame", grav: -0.05, decay: 0.028,
+    });
+    // screen-wide flash at the swing
+    if (t >= 0.6 && t < 0.66) this._screenVignette((0.66 - t) / 0.06 * 0.25, "rgba(230,240,255,0.5)", "rgba(230,240,255,0)");
   }
 
   // ---- animated specials renderer -----------------------------------------
@@ -326,30 +366,73 @@ export class FxEngine {
     }
 
     if (sp.type === "chakra") {
-      // burning cloak silhouette + nine whipping tails
-      ctx.save(); ctx.globalAlpha = fade * 0.8;
-      const s = 70 + p * 40;
-      const g = ctx.createRadialGradient(sp.x, sp.y, 5, sp.x, sp.y, s * 1.6);
-      g.addColorStop(0, "rgba(255,208,90,0.8)"); g.addColorStop(0.6, "rgba(255,120,40,0.35)"); g.addColorStop(1, "rgba(255,60,20,0)");
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sp.x, sp.y, s * 1.6, 0, 7); ctx.fill();
-      // nine tails
+      // ===================== NINE-TAILS — fox spirit + chakra aura =====================
+      const W = innerWidth, H = innerHeight;
+      const cx = W / 2, cy = H * 0.6;
+      const s = Math.min(W, H) * (0.34 + p * 0.06);
+      // 1) Darken arena + orange chakra glow
+      this._screenVignette(fade * 0.55, "rgba(60,26,6,0.5)", "rgba(10,4,0,0.9)");
+      ctx.save(); ctx.globalAlpha = fade;
+      const aura = ctx.createRadialGradient(cx, cy, s * 0.2, cx, cy, s * 2.2);
+      aura.addColorStop(0, "rgba(255,200,80,0.55)"); aura.addColorStop(0.5, "rgba(255,110,40,0.3)"); aura.addColorStop(1, "rgba(255,60,20,0)");
+      ctx.fillStyle = aura; ctx.beginPath(); ctx.arc(cx, cy, s * 2.2, 0, 7); ctx.fill();
+
+      const bodyGrad = ctx.createLinearGradient(cx, cy - s, cx, cy + s);
+      bodyGrad.addColorStop(0, "#ffcf5a"); bodyGrad.addColorStop(0.5, "#ff8a2d"); bodyGrad.addColorStop(1, "#e0521a");
+
+      // 2) Nine whipping tails fanning up and out behind the fox
+      ctx.strokeStyle = bodyGrad; ctx.lineCap = "round";
       for (let i = 0; i < 9; i++) {
-        const baseA = -Math.PI / 2 + (i - 4) * 0.32;
-        const wave = Math.sin(sp.t * 9 + i) * 0.25;
-        ctx.strokeStyle = `rgba(255,${140 + i * 8},60,${0.75 * fade})`;
-        ctx.lineWidth = 7 - Math.abs(i - 4);
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(sp.x, sp.y);
-        const midA = baseA + wave, endA = baseA + wave * 1.8;
-        const L = s * (1.2 + (i % 3) * 0.25);
+        const spread = (i - 4) / 4;                 // -1..1
+        const baseA = -Math.PI / 2 + spread * 1.15; // fan upward
+        const wave = Math.sin(sp.t * 6 + i * 0.8) * 0.22;
+        const L = s * (1.5 + Math.abs(spread) * 0.5);
+        const ox = cx + spread * s * 0.15, oy = cy - s * 0.2;
+        ctx.lineWidth = s * (0.13 - Math.abs(spread) * 0.03);
+        ctx.beginPath(); ctx.moveTo(ox, oy);
         ctx.quadraticCurveTo(
-          sp.x + Math.cos(midA) * L * 0.6, sp.y + Math.sin(midA) * L * 0.6,
-          sp.x + Math.cos(endA) * L, sp.y + Math.sin(endA) * L
+          ox + Math.cos(baseA + wave) * L * 0.55, oy + Math.sin(baseA + wave) * L * 0.55,
+          ox + Math.cos(baseA + wave * 2) * L, oy + Math.sin(baseA + wave * 2) * L
         );
         ctx.stroke();
+        // white tail tips
+        ctx.save(); ctx.strokeStyle = "rgba(255,245,220,0.9)"; ctx.lineWidth = s * 0.05;
+        const tx = ox + Math.cos(baseA + wave * 2) * L, ty = oy + Math.sin(baseA + wave * 2) * L;
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.cos(baseA) * s * 0.12, ty - Math.sin(baseA) * s * 0.12); ctx.stroke();
+        ctx.restore();
       }
+
+      // 3) Fox body — hunched, four legs, head with ears + snout
+      ctx.fillStyle = bodyGrad;
+      ctx.beginPath();
+      ctx.moveTo(cx - s * 0.75, cy + s * 0.5);            // back haunch
+      ctx.quadraticCurveTo(cx - s * 0.9, cy - s * 0.15, cx - s * 0.45, cy - s * 0.25);
+      ctx.quadraticCurveTo(cx - s * 0.1, cy - s * 0.35, cx + s * 0.35, cy - s * 0.2);  // back
+      ctx.lineTo(cx + s * 0.8, cy - s * 0.05);            // toward head/shoulder
+      ctx.quadraticCurveTo(cx + s * 0.55, cy + s * 0.35, cx + s * 0.3, cy + s * 0.5);  // front leg
+      ctx.lineTo(cx - s * 0.75, cy + s * 0.5); ctx.closePath(); ctx.fill();
+      // head
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 0.6, cy - s * 0.1);
+      ctx.lineTo(cx + s * 0.72, cy - s * 0.5);            // left ear
+      ctx.lineTo(cx + s * 0.86, cy - s * 0.2);
+      ctx.lineTo(cx + s * 1.0, cy - s * 0.46);            // right ear
+      ctx.lineTo(cx + s * 1.08, cy - s * 0.05);
+      ctx.quadraticCurveTo(cx + s * 1.25, cy + s * 0.02, cx + s * 1.2, cy + s * 0.12); // snout
+      ctx.lineTo(cx + s * 1.0, cy + s * 0.14);
+      ctx.quadraticCurveTo(cx + s * 0.75, cy + s * 0.2, cx + s * 0.6, cy - s * 0.1);
+      ctx.closePath(); ctx.fill();
+      // glowing eye + inner ears
+      const eg = 0.7 + Math.sin(sp.t * 20) * 0.3;
+      ctx.fillStyle = `rgba(255,60,40,${eg})`;
+      ctx.beginPath(); ctx.ellipse(cx + s * 0.92, cy - s * 0.06, s * 0.05, s * 0.03, -0.3, 0, 7); ctx.fill();
       ctx.restore();
+
+      // fire embers rising
+      if (Math.random() < 0.8) this._spawn(cx + rnd(-s, s), cy + rnd(-s * 0.3, s * 0.5), {
+        vx: rnd(-1, 1), vy: rnd(-5, -2), size: rnd(4, 9) * SCALE * 0.7,
+        color: ["#ffcf5a", "#ff8a2d", "#ff5b2d"][Math.floor(rnd(0, 3))], shape: "flame", grav: -0.06, decay: 0.03,
+      });
       return;
     }
 
@@ -377,26 +460,57 @@ export class FxEngine {
     }
 
     if (sp.type === "domain") {
-      // expanding rune circle + inner inversion
-      const R = p * Math.max(innerWidth, innerHeight) * 0.5;
+      // ===================== DOMAIN EXPANSION — inverted dome + runes =====================
+      const W = innerWidth, H = innerHeight;
+      const cx = W / 2, cy = H / 2;
+      const maxR = Math.hypot(W, H) * 0.6;
+      const R = Math.min(maxR, p * maxR * 1.4);   // dome expands to fill the screen
+      // 1) Inverted void — flood the whole screen dark violet
+      this._screenVignette(fade * 0.9, "rgba(46,14,80,0.55)", "rgba(6,2,14,0.98)");
       ctx.save(); ctx.globalAlpha = fade;
-      ctx.fillStyle = "rgba(30,8,50,0.35)";
-      ctx.beginPath(); ctx.arc(sp.x, sp.y, R, 0, 7); ctx.fill();
-      ctx.strokeStyle = "#e8d8ff"; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(sp.x, sp.y, R, 0, 7); ctx.stroke();
-      ctx.strokeStyle = "rgba(232,216,255,0.5)";
-      ctx.beginPath(); ctx.arc(sp.x, sp.y, R * 0.82, 0, 7); ctx.stroke();
-      // rotating runes on the rim
-      ctx.fillStyle = "#e8d8ff";
-      ctx.font = "700 16px monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      for (let i = 0; i < 12; i++) {
-        const a = sp.t * 1.2 + (i / 12) * Math.PI * 2;
-        ctx.save();
-        ctx.translate(sp.x + Math.cos(a) * R * 0.91, sp.y + Math.sin(a) * R * 0.91);
-        ctx.rotate(a + Math.PI / 2);
-        ctx.fillText(GLYPHS[i % GLYPHS.length], 0, 0);
-        ctx.restore();
+
+      // 2) Expanding energy dome (radial shell)
+      const dome = ctx.createRadialGradient(cx, cy, R * 0.55, cx, cy, R);
+      dome.addColorStop(0, "rgba(120,60,200,0)"); dome.addColorStop(0.85, "rgba(150,90,255,0.18)"); dome.addColorStop(1, "rgba(232,216,255,0.55)");
+      ctx.fillStyle = dome; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fill();
+      ctx.strokeStyle = "rgba(232,216,255,0.9)"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
+
+      // 3) Inward-collapsing energy lines
+      ctx.strokeStyle = "rgba(200,170,255,0.35)"; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 24; i++) {
+        const a = (i / 24) * Math.PI * 2 + sp.t * 0.4;
+        const r1 = R, r2 = R * (0.4 + (Math.sin(sp.t * 3 + i) * 0.1 + 0.1));
+        ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); ctx.stroke();
       }
+
+      // 4) Three counter-rotating rune rings
+      const rings = [{ r: 0.62, dir: 1, n: 16 }, { r: 0.44, dir: -1, n: 12 }, { r: 0.26, dir: 1, n: 8 }];
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (const ring of rings) {
+        const rr = R * ring.r;
+        ctx.strokeStyle = "rgba(232,216,255,0.35)"; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 7); ctx.stroke();
+        ctx.fillStyle = "rgba(232,216,255,0.9)";
+        ctx.font = `700 ${Math.max(11, R * 0.03)}px monospace`;
+        for (let i = 0; i < ring.n; i++) {
+          const a = ring.dir * sp.t * 0.8 + (i / ring.n) * Math.PI * 2;
+          ctx.save(); ctx.translate(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); ctx.rotate(a + Math.PI / 2);
+          ctx.fillText(GLYPHS[(i * 3 + ring.n) % GLYPHS.length], 0, 0); ctx.restore();
+        }
+      }
+
+      // 5) Central sigil — a pulsing many-pointed star
+      const sig = R * 0.12 * (1 + Math.sin(sp.t * 8) * 0.12);
+      ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + sp.t * 0.6;
+        const rr = i % 2 ? sig : sig * 0.45;
+        const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath(); ctx.stroke();
       ctx.restore();
       return;
     }

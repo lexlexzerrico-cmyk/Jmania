@@ -201,25 +201,14 @@ export function renderMicPanel(modeLabel, sensitivity, supported) {
   </section>`;
 }
 
+// Vertical lightning bolt used as the clash divider.
+const BOLT_SVG = `<svg viewBox="0 0 60 150" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M35 -2 L19 66 L31 66 L16 152 L46 60 L32 60 Z" fill="#eaffff"/>
+</svg>`;
+
 // ---- Arena -----------------------------------------------------------------
 export function renderArena(cfg, profile) {
-  const versus = cfg.bot ? `
-    <div class="versus" id="versus">
-      <div class="vs-card you">
-        <div class="vs-name">🫵 You</div>
-        <div class="vs-score" id="you-score">0</div>
-        <div class="vs-bar"><i id="you-bar"></i></div>
-      </div>
-      <div class="vs-mid">VS</div>
-      <div class="vs-card foe">
-        <div class="vs-name">🤖 ${cfg.bot.name}</div>
-        <div class="vs-score" id="foe-score">0</div>
-        <div class="vs-bar"><i id="foe-bar"></i></div>
-      </div>
-    </div>` : "";
-
-  return `
-  <section class="screen arena">
+  const arenaTop = `
     <div class="arena-top">
       <div class="mode-badge">${cfg.label}</div>
       <div class="timer-ring">
@@ -233,9 +222,69 @@ export function renderArena(cfg, profile) {
         </svg>
         <div class="t-text" id="timer-text">${cfg.duration}</div>
       </div>
-    </div>
+    </div>`;
 
-    ${versus}
+  // -------- 1v1 CLASH layout (tug-of-war bar with lightning) --------
+  if (cfg.bot) {
+    return `
+    <section class="screen arena">
+      ${arenaTop}
+
+      <div class="clash-arena">
+        <div class="clash-heads">
+          <div class="clash-head you">
+            <span class="ch-av">🫵</span>
+            <div>
+              <div class="ch-name">You</div>
+              <div class="ch-cps"><b id="you-cps">0</b> cps</div>
+            </div>
+          </div>
+          <div class="clash-head foe">
+            <span class="ch-av">🤖</span>
+            <div>
+              <div class="ch-name">${cfg.bot.name}</div>
+              <div class="ch-cps"><b id="foe-cps">0</b> cps</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="clash-bar">
+          <div class="clash-fill you" id="clash-you" style="width:50%">
+            <span class="cf-king">👑</span><span class="cf-pct" id="you-pct">50</span>
+          </div>
+          <div class="clash-fill foe" id="clash-foe" style="width:50%">
+            <span class="cf-king">👑</span><span class="cf-pct" id="foe-pct">50</span>
+          </div>
+          <div class="clash-bolt" id="clash-bolt" style="left:50%">${BOLT_SVG}</div>
+        </div>
+
+        <div class="clash-tagline">⚡ Clap faster to push the lightning — drain their bar to <b>KNOCKOUT</b>!</div>
+      </div>
+
+      <div class="clap-stage" style="max-width:520px;padding:22px 24px;margin-top:22px">
+        <div class="clap-emoji" id="clap-emoji" style="font-size:clamp(60px,13vw,100px)">👏</div>
+        <div class="combo-wrap">
+          <div class="combo-line">
+            <span class="combo-x" id="combo-x">x1.0</span>
+            <span class="combo-txt">multiplier — sustain speed for a harder shove</span>
+          </div>
+        </div>
+        <div class="cps-meter">
+          <div class="cps-track"><div class="cps-fill" id="cps-fill"></div></div>
+          <div class="cps-labels"><span>your claps / sec</span><span class="cps-now" id="cps-now">0</span></div>
+        </div>
+      </div>
+
+      <div class="center mt-24">
+        <button class="btn ghost" id="arena-quit">Forfeit</button>
+      </div>
+    </section>`;
+  }
+
+  // -------- Solo layout (high-score) --------
+  return `
+  <section class="screen arena">
+    ${arenaTop}
 
     <div class="clap-stage">
       <div class="clap-emoji" id="clap-emoji">👏</div>
@@ -276,24 +325,29 @@ export function renderResults(result, report) {
     : "";
 
   const verdict = result.hasOpponent
-    ? (result.won ? "VICTORY" : "DEFEAT")
+    ? (result.knockout ? (result.won ? "KNOCKOUT!" : "KNOCKED OUT") : (result.won ? "VICTORY" : "DEFEAT"))
     : "MATCH COMPLETE";
   const verdictClass = result.hasOpponent ? (result.won ? "win" : "loss") : "win";
 
-  const foeLine = result.hasOpponent
-    ? `<div class="res-grid" style="grid-template-columns:1fr 1fr;margin-top:8px">
-         <div class="rb"><div class="v">${result.score.toLocaleString()}</div><div class="l">You</div></div>
-         <div class="rb"><div class="v">${result.botScore.toLocaleString()}</div><div class="l">${result.botName}</div></div>
-       </div>` : "";
+  // 1v1: show the final clash bar instead of a numeric score.
+  const hero = result.hasOpponent
+    ? `<div class="res-clash">
+         <div class="clash-bar" style="height:80px;margin-top:14px">
+           <div class="clash-fill you" style="width:${result.youBar}%"><span class="cf-pct" style="left:16px;font-size:20px">${result.youBar}%</span></div>
+           <div class="clash-fill foe" style="width:${result.foeBar}%"><span class="cf-pct" style="right:16px;font-size:20px">${result.foeBar}%</span></div>
+           <div class="clash-bolt" style="left:${result.youBar}%">${BOLT_SVG}</div>
+         </div>
+         <div class="clash-tagline" style="margin-top:12px">You <b>${result.youBar}%</b> · ${result.botName} <b>${result.foeBar}%</b></div>
+       </div>`
+    : `<div class="res-score">${result.score.toLocaleString()}</div>`;
 
   return `
   <section class="screen results">
     <div class="res-card">
       <div class="res-verdict ${verdictClass}">${verdict}</div>
-      <div class="res-score">${result.score.toLocaleString()}</div>
-      ${foeLine}
+      ${hero}
 
-      <div class="res-grid">
+      <div class="res-grid" style="margin-top:22px">
         <div class="rb"><div class="v">${result.totalClaps}</div><div class="l">Claps</div></div>
         <div class="rb"><div class="v">${result.peakCps}</div><div class="l">Peak CPS</div></div>
         <div class="rb"><div class="v">x${comboMult(result.peakCombo).toFixed(1)}</div><div class="l">Best Combo</div></div>

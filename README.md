@@ -31,9 +31,15 @@ Any static host works too (GitHub Pages, Netlify, Vercel, `npx serve`, …).
   - ⚡ **Classic** — a clean 30-second high-score sprint.
   - ⚔️ **Duel (1v1)** — head-to-head vs an AI rival scaled to your rank.
   - 🎛️ **Custom** — pick the duration and rival difficulty.
-- **Fast-clap scoring** — sustained fast clapping ramps a **combo multiplier**
-  (up to ×6), so the score climbs faster the harder you go. A live CPS meter
-  turns *hot* when you break 6 claps/second.
+- **1v1 Clash bar** — a Clash-Royale-style tug-of-war. Instead of a score, a
+  single bar is split between you (blue) and your rival (red) with a **lightning
+  bolt** at the seam. Every clap shoves the bolt toward the opponent — clap
+  faster than they do and their bar shrinks toward 0 for a **KNOCKOUT**. If the
+  timer runs out, whoever owns more of the bar wins.
+- **Fast-clap scoring (solo modes)** — sustained fast clapping ramps a **combo
+  multiplier** (up to ×6), so the score climbs faster the harder you go. A live
+  CPS meter turns *hot* when you break 6 claps/second. In 1v1 the same multiplier
+  makes each clap shove the lightning bar harder.
 - **Valorant-style ranks** — Iron · Bronze · Silver · Gold · Platinum · Diamond ·
   Ascendant · Immortal (three divisions each) · **Radiant**, with RR gains/losses
   and promotions/demotions.

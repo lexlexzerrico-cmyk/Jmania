@@ -243,28 +243,47 @@ function runCountdown(done) {
 const CIRC = 2 * Math.PI * 48; // timer ring circumference
 
 function wireMatchEvents(match, cfg) {
-  const scoreEl = $("#score-huge");
+  const scoreEl = $("#score-huge");   // solo only
   const comboEl = $("#combo-x");
   const cpsFill = $("#cps-fill");
   const cpsNow = $("#cps-now");
   const timerText = $("#timer-text");
   const timerArc = $("#timer-arc");
   const clapEmoji = $("#clap-emoji");
-  const youScore = $("#you-score");
-  const foeScore = $("#foe-score");
-  const youBar = $("#you-bar");
-  const foeBar = $("#foe-bar");
+  // clash (1v1) elements
+  const clashYou = $("#clash-you");
+  const clashFoe = $("#clash-foe");
+  const clashBolt = $("#clash-bolt");
+  const youPct = $("#you-pct");
+  const foePct = $("#foe-pct");
+  const youCps = $("#you-cps");
+  const foeCps = $("#foe-cps");
 
   match.addEventListener("clap", (e) => {
     const { score, mult, strength } = e.detail;
-    scoreEl.textContent = score.toLocaleString();
-    scoreEl.classList.add("bump");
-    setTimeout(() => scoreEl.classList.remove("bump"), 90);
+    if (scoreEl) {
+      scoreEl.textContent = score.toLocaleString();
+      scoreEl.classList.add("bump");
+      setTimeout(() => scoreEl.classList.remove("bump"), 90);
+    }
     comboEl.textContent = "x" + mult.toFixed(1);
     comboEl.classList.add("bump");
     setTimeout(() => comboEl.classList.remove("bump"), 100);
     clapEmoji.classList.remove("pulse"); void clapEmoji.offsetWidth; clapEmoji.classList.add("pulse");
     clapBurst(strength);
+  });
+
+  // 1v1 tug-of-war bar updates
+  match.addEventListener("clash", (e) => {
+    if (!clashYou) return;
+    const tug = e.detail.tug;
+    const you = Math.round(tug), foe = 100 - you;
+    clashYou.style.width = tug + "%";
+    clashFoe.style.width = (100 - tug) + "%";
+    clashBolt.style.left = tug + "%";
+    youPct.textContent = you; foePct.textContent = foe;
+    // zap the bolt on every clap
+    clashBolt.classList.remove("hit"); void clashBolt.offsetWidth; clashBolt.classList.add("hit");
   });
 
   match.addEventListener("tick", (e) => {
@@ -278,12 +297,9 @@ function wireMatchEvents(match, cfg) {
     cpsFill.classList.toggle("hot", d.cps >= 6);
     cpsNow.textContent = d.cps;
 
-    if (cfg.bot && youScore) {
-      youScore.textContent = d.score.toLocaleString();
-      foeScore.textContent = d.botScore.toLocaleString();
-      const total = Math.max(1, d.score + d.botScore);
-      youBar.style.width = (d.score / total) * 100 + "%";
-      foeBar.style.width = (d.botScore / total) * 100 + "%";
+    if (cfg.bot && youCps) {
+      youCps.textContent = d.cps;
+      foeCps.textContent = d.botCps;
     }
 
     // Time warning flash
@@ -295,8 +311,22 @@ function wireMatchEvents(match, cfg) {
 
   match.addEventListener("end", (result) => {
     cleanupInputs();
-    finishMatch(result.detail);
+    const r = result.detail;
+    if (r.knockout) {
+      koFlash(r.won);
+      setTimeout(() => finishMatch(r), 1050);
+    } else {
+      finishMatch(r);
+    }
   });
+}
+
+function koFlash(won) {
+  const el = document.createElement("div");
+  el.className = "ko-flash";
+  el.innerHTML = `<div class="ko-text">${won ? "KNOCKOUT!" : "KNOCKED OUT"}</div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1100);
 }
 
 function cleanupInputs() {

@@ -1,15 +1,29 @@
 /* ============================================================
-   game.js — match engine: scoring, combo, CPS, 1v1 bot
+   game.js — match engine: scoring, combo, CPS, 1v1 clash
    ------------------------------------------------------------
-   Emits "tick", "clap", "combo", "end" events. The UI subscribes
-   and renders. Fast clapping raises the combo multiplier, which
-   makes the score climb faster — the core game feel.
+   Emits "tick", "clap", "clash", "end" events. The UI subscribes
+   and renders.
+
+   Solo modes: fast clapping ramps a combo multiplier so the SCORE
+   climbs faster — the core game feel.
+
+   1v1 modes (any match with a bot): a Clash-Royale-style tug-of-war
+   bar. Every clap shoves a lightning divider toward the opponent;
+   whoever claps faster drives the bar until the other side hits 0
+   for a KNOCKOUT.
    ============================================================ */
 
 export const BASE_POINTS = 10;
 const FAST_GAP_MS = 250;     // clap gaps under this build combo (>4 cps)
 const COMBO_DECAY_MS = 700;  // no clap for this long => combo cools down
 const MAX_MULT = 6;
+
+// --- Clash (tug-of-war) tuning ---
+const BASE_PUSH = 1.35;      // bar units shoved per clap at base strength
+// Fast, sustained clapping (higher combo) shoves harder.
+function pushFor(combo, strength = 1) {
+  return BASE_PUSH * (0.6 + strength * 0.4) * (1 + Math.min(combo, 25) * 0.03);
+}
 
 export class Match extends EventTarget {
   /**
@@ -42,7 +56,14 @@ export class Match extends EventTarget {
     this.bot = cfg.bot || null;
     this.botScore = 0;
     this.botClaps = 0;
+    this.botClapTimes = [];
     this._botTimer = null;
+    this._botCombo = 0;
+
+    // 1v1 clash tug bar: 0..100 = the player's share of the bar.
+    // 50 = dead even, 100 = player knockout, 0 = foe knockout.
+    this.tug = 50;
+    this.knockout = 0;       // 0 none, 1 player won, -1 foe won
   }
 
   start() {
@@ -74,6 +95,13 @@ export class Match extends EventTarget {
     // CPS bookkeeping
     this.clapTimes.push(now);
 
+    // 1v1 clash: shove the lightning bar toward the opponent.
+    if (this.bot) {
+      this.tug = Math.min(100, this.tug + pushFor(this.combo, strength));
+      this.dispatchEvent(new CustomEvent("clash", { detail: { tug: this.tug, by: "you", strength } }));
+      if (this.tug >= 100) { this.knockout = 1; return this._finish(); }
+    }
+
     this.dispatchEvent(new CustomEvent("clap", {
       detail: { pts, score: this.score, combo: this.combo, mult: this.mult, strength },
     }));
@@ -83,6 +111,12 @@ export class Match extends EventTarget {
     const cutoff = now - 1000;
     while (this.clapTimes.length && this.clapTimes[0] < cutoff) this.clapTimes.shift();
     return this.clapTimes.length;
+  }
+
+  _botCps(now) {
+    const cutoff = now - 1000;
+    while (this.botClapTimes.length && this.botClapTimes[0] < cutoff) this.botClapTimes.shift();
+    return this.botClapTimes.length;
   }
 
   _loop() {
@@ -114,6 +148,8 @@ export class Match extends EventTarget {
         mult: this.mult,
         botScore: this.botScore,
         botClaps: this.botClaps,
+        botCps: this.bot ? this._botCps(now) : 0,
+        tug: this.tug,
       },
     }));
 
@@ -137,12 +173,18 @@ export class Match extends EventTarget {
   }
 
   _botClap() {
+    const now = performance.now();
     // Bot builds combo similarly for fairness
     this.botClaps += 1;
-    this._botCombo = (this._botCombo || 0);
+    this.botClapTimes.push(now);
     this._botCombo += 1;
     const mult = Math.min(MAX_MULT, 1 + this._botCombo * 0.2);
     this.botScore += Math.round(BASE_POINTS * mult * 0.9);
+
+    // 1v1 clash: bot shoves the bar back toward the player.
+    this.tug = Math.max(0, this.tug - pushFor(this._botCombo, 1));
+    this.dispatchEvent(new CustomEvent("clash", { detail: { tug: this.tug, by: "foe", strength: 1 } }));
+    if (this.tug <= 0) { this.knockout = -1; this._finish(); }
   }
 
   _finish() {
@@ -151,8 +193,16 @@ export class Match extends EventTarget {
     if (this.raf) cancelAnimationFrame(this.raf);
     if (this._botTimer) clearTimeout(this._botTimer);
 
-    const won = this.bot ? this.score >= this.botScore : true;
-    const margin = this.bot ? Math.abs(this.score - this.botScore) : this.score;
+    // 1v1 is decided by the clash bar (knockout, or who owns more of it at
+    // time-out). Solo modes always "win" (it's a high-score run).
+    let won, margin;
+    if (this.bot) {
+      won = this.knockout ? this.knockout === 1 : this.tug >= 50;
+      margin = Math.abs(this.tug - (100 - this.tug)); // 0..100 bar dominance
+    } else {
+      won = true;
+      margin = this.score;
+    }
 
     const result = {
       mode: this.cfg.mode,
@@ -167,6 +217,9 @@ export class Match extends EventTarget {
       botName: this.bot ? this.bot.name : null,
       won,
       margin,
+      knockout: !!this.knockout,
+      youBar: Math.round(this.tug),
+      foeBar: Math.round(100 - this.tug),
     };
     this.dispatchEvent(new CustomEvent("end", { detail: result }));
   }

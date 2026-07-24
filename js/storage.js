@@ -18,9 +18,12 @@ const DEFAULT_PROFILE = {
     bestCps: 0,
     bestCombo: 0,
   },
+  achievements: [],
+  history: [],
   settings: {
     sensitivity: 0.5,   // 0..1
     musicOn: true,
+    sfxOn: true,
     camOn: false,       // webcam feed (off by default for privacy)
   },
 };
@@ -36,6 +39,8 @@ export function loadProfile() {
       ...p,
       stats: { ...DEFAULT_PROFILE.stats, ...(p.stats || {}) },
       settings: { ...DEFAULT_PROFILE.settings, ...(p.settings || {}) },
+      achievements: Array.isArray(p.achievements) ? p.achievements : [],
+      history: Array.isArray(p.history) ? p.history : [],
     };
   } catch {
     return structuredClone(DEFAULT_PROFILE);
@@ -60,14 +65,17 @@ export function applyMatchResult(profile, result) {
     rr: profile.rr,
   };
 
-  // XP from score (all modes give xp)
-  const xpGain = Math.round(result.score * 0.35 + result.totalClaps * 2 + (result.won ? 60 : 0));
+  // XP: practice rewards effort only (no score/win term) so an endless
+  // run can't inflate progression; other modes reward score + result.
+  const xpGain = result.practice
+    ? Math.round(result.totalClaps * 2)
+    : Math.round(result.score * 0.35 + result.totalClaps * 2 + (result.won ? 60 : 0));
   profile.xp += xpGain;
 
-  // RR only moves in ranked / 1v1
+  // RR only moves in ranked / 1v1 (never in practice)
   let rrDelta = 0;
   let rankChange = 0; // -1 demote, +1 promote, 0 none
-  if (result.ranked) {
+  if (result.ranked && !result.practice) {
     if (result.won) {
       rrDelta = 18 + Math.round(Math.min(14, result.margin * 0.4));
     } else {
@@ -91,14 +99,35 @@ export function applyMatchResult(profile, result) {
     if (profile.rankIndex >= MAX_RANK_INDEX) profile.rr = Math.min(profile.rr, RR_PER_DIVISION);
   }
 
-  // Stats
+  // Stats. Practice is a sandbox: it counts claps and rate-based bests
+  // (fair regardless of length) but not matches/wins or timed high score.
   const s = profile.stats;
-  s.matches += 1;
-  if (result.won) s.wins += 1;
   s.totalClaps += result.totalClaps;
-  s.bestScore = Math.max(s.bestScore, result.score);
   s.bestCps = Math.max(s.bestCps, result.peakCps);
   s.bestCombo = Math.max(s.bestCombo, result.peakCombo);
+  if (!result.practice) {
+    s.matches += 1;
+    if (result.won) s.wins += 1;
+    s.bestScore = Math.max(s.bestScore, result.score);
+  }
+
+  // Match history (most recent first, capped)
+  if (!Array.isArray(profile.history)) profile.history = [];
+  profile.history.unshift({
+    mode: result.mode,
+    ranked: !!result.ranked,
+    practice: !!result.practice,
+    hasOpponent: !!result.hasOpponent,
+    won: !!result.won,
+    knockout: !!result.knockout,
+    score: result.score,
+    peakCps: result.peakCps,
+    youBar: result.youBar ?? null,
+    foeBar: result.foeBar ?? null,
+    botName: result.botName || null,
+    ts: Date.now(),
+  });
+  profile.history = profile.history.slice(0, 12);
 
   saveProfile(profile);
 

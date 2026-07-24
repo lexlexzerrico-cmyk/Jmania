@@ -34,6 +34,8 @@ Any static host works too (GitHub Pages, Netlify, Vercel, `npx serve`, …).
   - 🏆 **Ranked** — win to gain RR and climb divisions toward Radiant.
   - ⚡ **Classic** — a clean 30-second high-score sprint.
   - ⚔️ **Duel (1v1)** — head-to-head vs an AI rival scaled to your rank.
+  - 🎯 **Practice** — endless, no timer, no stakes. Warm up, tune your mic and
+    chase your top CPS; it never touches your rank.
   - 🎛️ **Custom** — pick the duration and rival difficulty.
 - **1v1 Clash bar** — a Clash-Royale-style tug-of-war. Instead of a score, a
   single bar is split between you (blue) and your rival (red) with a **lightning
@@ -49,8 +51,17 @@ Any static host works too (GitHub Pages, Netlify, Vercel, `npx serve`, …).
   and promotions/demotions.
 - **Levels & XP** — an escalating XP curve with playful level titles
   (Rookie Clapper → Clap Deity), persisted in `localStorage`.
+- **Achievements** — 15 unlockable badges for speed, knockouts, ranks, levels
+  and clap milestones, with unlock toasts and a badge gallery (`js/achievements.js`).
+- **Match history** — your last 12 matches are logged and shown in the lobby.
+- **Cam victory snapshots** — win with the webcam on and the results screen
+  captures a photo of your winning moment, with a one-click download.
+- **Settings** — edit your display name, tune mic sensitivity, toggle music /
+  SFX / webcam, and reset all progress.
 - **Lobby music** — a self-contained synth-wave loop generated with the Web Audio
   API (`js/music.js`) — no audio files, fully royalty-free.
+- **Sound effects** — synthesized clap, countdown, knockout, win/lose, level-up
+  and unlock cues (`js/sfx.js`), also no audio files.
 - **Polished UI** — glassmorphism, animated gradient background, particle field,
   clap bursts, countdown, timer ring, and reward animations.
 
@@ -62,9 +73,12 @@ css/styles.css      design system + all screens
 js/
   main.js           app controller: router, input, match lifecycle
   audio.js          microphone clap-detection engine
+  camera.js         live webcam feed
   music.js          procedural lobby music synth
-  game.js           match engine: scoring, combo, CPS, 1v1 bot
+  sfx.js            procedural sound effects
+  game.js           match engine: scoring, combo, CPS, 1v1 clash bar
   ranks.js          rank ladder + level curve
+  achievements.js   unlockable badge definitions + checks
   storage.js        profile persistence + progression math
   ui.js             screen templates + view helpers
 ```

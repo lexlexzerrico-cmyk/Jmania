@@ -131,6 +131,9 @@ body {
 .hud-rank .rank-name { font-weight: 600; font-size: 13px; }
 .hud-rank .rank-rr { font-size: 11px; color: var(--text-faint); }
 
+.hud-gear { width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; cursor: pointer; font-size: 17px; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px); color: var(--text); transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
+.hud-gear:hover { transform: rotate(45deg); border-color: var(--accent); box-shadow: var(--glow-accent); }
+
 @media (max-width: 720px) {
   .hud-level .lvl-meta, .hud-rank .rank-meta { display: none; }
   .brand-name { font-size: 18px; }
@@ -216,6 +219,46 @@ body {
 .mode-card.classic { --mc: rgba(34,224,214,0.28); }
 .mode-card.custom  { --mc: rgba(255,208,90,0.26); }
 .mode-card.duel    { --mc: rgba(106,91,255,0.32); }
+.mode-card.practice { --mc: rgba(62,224,138,0.28); }
+
+/* Match history */
+.mh-list { display: grid; gap: 8px; }
+.mh-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(8px); }
+.mh-row .mh-ic { font-size: 18px; }
+.mh-row .mh-mode { font-family: "Chakra Petch"; font-weight: 700; font-size: 14px; min-width: 74px; }
+.mh-row .mh-detail { color: var(--text-dim); font-size: 13px; }
+.mh-outcome { font-weight: 700; }
+.mh-outcome.win { color: var(--good); }
+.mh-outcome.loss { color: var(--bad); }
+
+/* Achievements */
+.ach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.ach-card { position: relative; display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(10px); transition: transform 0.2s, border-color 0.2s; }
+.ach-card.got { border-color: var(--stroke-strong); box-shadow: 0 0 24px -10px rgba(255,208,90,0.5); }
+.ach-card.got:hover { transform: translateY(-3px); }
+.ach-card.locked { opacity: 0.55; filter: grayscale(0.5); }
+.ach-card .ach-ic { font-size: 30px; width: 44px; text-align: center; }
+.ach-card .ach-name { font-family: "Chakra Petch"; font-weight: 700; font-size: 15px; }
+.ach-card .ach-desc { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
+.ach-card .ach-check { position: absolute; top: 12px; right: 14px; color: var(--good); font-weight: 700; }
+
+/* Settings */
+.text-input { width: 100%; padding: 12px 16px; border-radius: var(--r-md); background: rgba(255,255,255,0.05); border: 1px solid var(--stroke); color: var(--text); font-family: var(--font); font-size: 15px; outline: none; transition: border-color 0.2s; }
+.text-input:focus { border-color: var(--accent); box-shadow: var(--glow-accent); }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--stroke); }
+.set-row .set-label { font-weight: 600; font-size: 14px; }
+.set-row .set-desc { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+.switch { width: 52px; height: 30px; border-radius: 999px; border: 1px solid var(--stroke-strong); background: rgba(255,255,255,0.06); cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
+.switch span { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--text-dim); transition: transform 0.2s var(--ease), background 0.2s; }
+.switch.on { background: var(--grad-hot); border-color: transparent; }
+.switch.on span { transform: translateX(22px); background: #fff; }
+.danger-zone { margin-top: 20px; padding: 16px; border-radius: var(--r-md); border: 1px dashed var(--bad); background: rgba(255,91,110,0.06); }
+
+/* Winner snapshot */
+.res-snap { margin: 18px auto 6px; max-width: 320px; }
+.res-snap img { width: 100%; border-radius: var(--r-md); border: 2px solid var(--stroke-strong); transform: scaleX(-1); box-shadow: var(--shadow); display: block; }
+.res-snap .snap-cap { font-size: 12px; color: var(--text-faint); margin-top: 8px; }
+.res-snap .snap-dl { display: inline-block; margin-top: 10px; padding: 8px 16px; font-size: 13px; }
 
 /* Stats strip */
 .stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-top: 30px; }

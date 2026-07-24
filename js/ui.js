@@ -2,6 +2,7 @@
    ui.js — screen templates + small view helpers
    ============================================================ */
 import { LADDER, rankFromIndex, levelProgress, levelTitle, RR_PER_DIVISION } from "./ranks.js";
+import { ACHIEVEMENTS, isUnlocked } from "./achievements.js";
 
 // Mirror of the match multiplier cap (game.js MAX_MULT) so displayed
 // multipliers never exceed what the game actually awards.
@@ -10,6 +11,11 @@ const comboMult = (combo) => Math.min(MAX_MULT, 1 + combo * 0.2);
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+export function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
 
 export function toast(msg, icon = "✨") {
   const host = $("#toast-host");
@@ -43,22 +49,24 @@ export function renderHud(profile) {
         <span class="rank-name">${rank.label}</span>
         <span class="rank-rr">${profile.rr} RR</span>
       </div>
-    </div>`;
+    </div>
+    <button class="hud-gear" data-nav="settings" title="Settings" aria-label="Settings">⚙️</button>`;
 }
 
 // ---- Lobby -----------------------------------------------------------------
 export function renderLobby(profile) {
   const s = profile.stats;
   const winrate = s.matches ? Math.round((s.wins / s.matches) * 100) : 0;
+  const unlocked = (profile.achievements || []).length;
   return `
   <section class="screen">
     <div class="hero">
       <span class="kicker">🎧 Lobby online · music ready</span>
-      <h1>Welcome to <span class="g">JERKMANIA</span></h1>
+      <h1>Welcome back, <span class="g">${escapeHtml(profile.name || "Player")}</span></h1>
       <p class="lead">The AI clap-speed arena. Turn on your mic, clap as fast as your hands can go, and let the neural onset detector turn raw applause into raw score. Climb from Iron to Radiant.</p>
       <div class="hero-cta">
         <button class="btn big" data-play="ranked">🏆 Play Ranked</button>
-        <button class="btn ghost big" data-play="classic">⚡ Quick Classic</button>
+        <button class="btn ghost big" data-play="practice">🎯 Practice</button>
       </div>
     </div>
 
@@ -85,12 +93,26 @@ export function renderLobby(profile) {
         <p>Head-to-head against an AI rival scaled to your rank. Out-clap them before the timer dies.</p>
         <div class="mc-go">Find match <span class="arrow">→</span></div>
       </div>
+      <div class="mode-card practice" data-play="practice">
+        <span class="mc-tag">Free play</span>
+        <div class="mc-icon">🎯</div>
+        <h3>Practice</h3>
+        <p>Endless, no timer, no stakes. Warm up, tune your mic, and chase your top CPS.</p>
+        <div class="mc-go">Warm up <span class="arrow">→</span></div>
+      </div>
       <div class="mode-card custom" data-play="custom">
         <span class="mc-tag">Your rules</span>
         <div class="mc-icon">🎛️</div>
         <h3>Custom</h3>
         <p>Set the duration and difficulty. Build a marathon or a 10-second frenzy of pure clapping.</p>
         <div class="mc-go">Configure <span class="arrow">→</span></div>
+      </div>
+      <div class="mode-card" style="--mc:rgba(255,208,90,0.26)" data-nav="achievements">
+        <span class="mc-tag">${unlocked}/${ACHIEVEMENTS.length}</span>
+        <div class="mc-icon">🏅</div>
+        <h3>Achievements</h3>
+        <p>Unlock badges for speed, knockouts, ranks and milestones. Track your legend.</p>
+        <div class="mc-go">View badges <span class="arrow">→</span></div>
       </div>
     </div>
 
@@ -101,7 +123,28 @@ export function renderLobby(profile) {
       <div class="stat-box"><div class="v">${winrate}%</div><div class="l">Win Rate</div></div>
       <div class="stat-box"><div class="v">${s.totalClaps.toLocaleString()}</div><div class="l">Total Claps</div></div>
     </div>
+
+    ${renderHistory(profile)}
   </section>`;
+}
+
+function renderHistory(profile) {
+  const h = profile.history || [];
+  if (!h.length) return "";
+  const rows = h.map((m) => {
+    const icon = m.practice ? "🎯" : m.hasOpponent ? (m.won ? "🏆" : "💀") : "⚡";
+    const label = m.practice ? "Practice"
+      : m.mode === "ranked" ? "Ranked"
+      : m.mode === "duel" ? "Duel"
+      : m.mode === "custom" ? "Custom" : "Classic";
+    const detail = m.hasOpponent
+      ? `<span class="mh-outcome ${m.won ? "win" : "loss"}">${m.won ? (m.knockout ? "KO win" : "Win") : "Loss"}</span> · ${m.youBar ?? "?"}%–${m.foeBar ?? "?"}% vs ${escapeHtml(m.botName || "Rival")}`
+      : `${m.score.toLocaleString()} pts · ${m.peakCps} peak CPS`;
+    return `<div class="mh-row"><span class="mh-ic">${icon}</span><span class="mh-mode">${label}</span><span class="mh-detail">${detail}</span></div>`;
+  }).join("");
+  return `
+    <div class="section-title" style="margin-top:30px"><h2 style="font-size:22px">Recent Matches</h2></div>
+    <div class="mh-list">${rows}</div>`;
 }
 
 // ---- Ranks / progression ---------------------------------------------------
@@ -171,6 +214,63 @@ export function renderCustomSetup() {
       <div class="row">
         <button class="btn wide big" id="custom-start">Start Match →</button>
       </div>
+      <div class="center mt-24"><button class="btn ghost" data-nav="lobby">← Back</button></div>
+    </div>
+  </section>`;
+}
+
+// ---- Achievements ----------------------------------------------------------
+export function renderAchievements(profile) {
+  const unlocked = (profile.achievements || []).length;
+  const cards = ACHIEVEMENTS.map((a) => {
+    const got = isUnlocked(profile, a.id);
+    return `
+      <div class="ach-card ${got ? "got" : "locked"}">
+        <div class="ach-ic">${got ? a.icon : "🔒"}</div>
+        <div class="ach-body">
+          <div class="ach-name">${a.name}</div>
+          <div class="ach-desc">${a.desc}</div>
+        </div>
+        ${got ? '<div class="ach-check">✓</div>' : ""}
+      </div>`;
+  }).join("");
+  return `
+  <section class="screen">
+    <div class="section-title"><h2>Achievements</h2><span class="sub">${unlocked} / ${ACHIEVEMENTS.length} unlocked</span></div>
+    <div class="ach-grid">${cards}</div>
+    <div class="center mt-24"><button class="btn ghost" data-nav="lobby">← Back to lobby</button></div>
+  </section>`;
+}
+
+// ---- Settings --------------------------------------------------------------
+export function renderSettings(profile) {
+  const st = profile.settings;
+  const toggle = (id, on, label, desc) => `
+    <div class="set-row">
+      <div class="set-info"><div class="set-label">${label}</div><div class="set-desc">${desc}</div></div>
+      <button class="switch ${on ? "on" : ""}" id="${id}" role="switch" aria-checked="${on}"><span></span></button>
+    </div>`;
+  return `
+  <section class="screen setup">
+    <div class="section-title"><h2>Settings</h2><span class="sub">profile & audio</span></div>
+    <div class="setup-card">
+      <div class="field">
+        <label>Display name</label>
+        <input type="text" id="name-input" class="text-input" maxlength="18" value="${escapeHtml(profile.name || "Player")}" placeholder="Your name" />
+      </div>
+      <div class="field">
+        <label>Mic sensitivity · <span class="val-read" id="set-sens-read">${Math.round(st.sensitivity * 100)}%</span></label>
+        <input type="range" id="set-sens" min="0" max="1" step="0.01" value="${st.sensitivity}" />
+      </div>
+      ${toggle("set-music", st.musicOn, "Lobby music", "Procedural synth-wave loop")}
+      ${toggle("set-sfx", st.sfxOn, "Sound effects", "Claps, countdown, knockout & win cues")}
+      ${toggle("set-cam", st.camOn, "Webcam window", "Show your live camera while playing")}
+
+      <div class="danger-zone">
+        <div class="set-label" style="color:var(--bad)">Danger zone</div>
+        <button class="btn ghost" id="reset-btn" style="border-color:var(--bad);color:var(--bad);margin-top:10px">🗑️ Reset all progress</button>
+      </div>
+
       <div class="center mt-24"><button class="btn ghost" data-nav="lobby">← Back</button></div>
     </div>
   </section>`;
@@ -309,15 +409,15 @@ export function renderArena(cfg, profile) {
     </div>
 
     <div class="center mt-24">
-      <button class="btn ghost" id="arena-quit">Forfeit</button>
+      <button class="btn ${cfg.endless ? "" : "ghost"}" id="arena-quit">${cfg.endless ? "✓ Finish Practice" : "Forfeit"}</button>
     </div>
   </section>`;
 }
 
 // ---- Results ---------------------------------------------------------------
-export function renderResults(result, report) {
+export function renderResults(result, report, snapshot = null) {
   const rc = report.rankChange;
-  const rankLine = result.ranked
+  const rankLine = (result.ranked && !result.practice)
     ? (rc === 1
         ? `<div class="reward"><span class="r-ic">⬆️</span><div class="r-body"><div class="r-title">Promoted to ${report.rankAfter.label}!</div></div></div>`
         : rc === -1
@@ -325,12 +425,14 @@ export function renderResults(result, report) {
         : "")
     : "";
 
-  const verdict = result.hasOpponent
+  const verdict = result.practice
+    ? "NICE WARMUP"
+    : result.hasOpponent
     ? (result.knockout ? (result.won ? "KNOCKOUT!" : "KNOCKED OUT") : (result.won ? "VICTORY" : "DEFEAT"))
     : "MATCH COMPLETE";
-  const verdictClass = result.hasOpponent ? (result.won ? "win" : "loss") : "win";
+  const verdictClass = (result.hasOpponent && !result.won) ? "loss" : "win";
 
-  // 1v1: show the final clash bar instead of a numeric score.
+  // 1v1: show the final clash bar; solo/practice: show the score.
   const hero = result.hasOpponent
     ? `<div class="res-clash">
          <div class="clash-bar" style="height:80px;margin-top:14px">
@@ -342,11 +444,20 @@ export function renderResults(result, report) {
        </div>`
     : `<div class="res-score">${result.score.toLocaleString()}</div>`;
 
+  const snap = snapshot
+    ? `<div class="res-snap">
+         <img src="${snapshot}" alt="Victory snapshot" />
+         <div class="snap-cap">📸 Winner's snapshot</div>
+         <a class="btn ghost snap-dl" href="${snapshot}" download="jerkmania-victory.png">⬇️ Save photo</a>
+       </div>`
+    : "";
+
   return `
   <section class="screen results">
     <div class="res-card">
       <div class="res-verdict ${verdictClass}">${verdict}</div>
       ${hero}
+      ${snap}
 
       <div class="res-grid" style="margin-top:22px">
         <div class="rb"><div class="v">${result.totalClaps}</div><div class="l">Claps</div></div>

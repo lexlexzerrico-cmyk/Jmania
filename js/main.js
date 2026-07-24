@@ -1,15 +1,18 @@
 /* ============================================================
    main.js — app controller: router, input, match lifecycle
    ============================================================ */
-import { loadProfile, saveProfile, applyMatchResult } from "./storage.js";
+import { loadProfile, saveProfile, applyMatchResult, resetProfile } from "./storage.js";
 import { rankFromIndex, levelProgress } from "./ranks.js";
 import { ClapEngine } from "./audio.js";
 import { Camera } from "./camera.js";
 import { LobbyMusic } from "./music.js";
+import { Sfx } from "./sfx.js";
 import { Match, makeBot } from "./game.js";
+import { checkAchievements } from "./achievements.js";
 import {
   $, $$, toast, renderHud, renderLobby, renderRanks, renderCustomSetup,
-  renderMicPanel, renderArena, renderResults, initParticles, clapBurst,
+  renderMicPanel, renderArena, renderResults, renderAchievements, renderSettings,
+  initParticles, clapBurst,
 } from "./ui.js";
 
 const app = $("#app");
@@ -19,6 +22,7 @@ const state = {
   clap: new ClapEngine(),
   camera: new Camera(),
   music: new LobbyMusic(),
+  sfx: new Sfx(),
   match: null,
   inputMode: "mic",     // "mic" | "keyboard"
   micReady: false,
@@ -26,8 +30,9 @@ const state = {
   keyHandler: null,
 };
 
-// Apply saved sensitivity
+// Apply saved sensitivity + sfx preference
 state.clap.setSensitivity(state.profile.settings.sensitivity);
+state.sfx.setEnabled(state.profile.settings.sfxOn);
 
 // ---------------------------------------------------------------------------
 // HUD + navigation
@@ -43,10 +48,12 @@ function navTo(screen) {
   detachKeyboard();
 
   switch (screen) {
-    case "lobby":  app.innerHTML = renderLobby(state.profile); break;
-    case "ranks":  app.innerHTML = renderRanks(state.profile); break;
-    case "custom": app.innerHTML = renderCustomSetup(); wireCustomSetup(); break;
-    default:       app.innerHTML = renderLobby(state.profile);
+    case "lobby":        app.innerHTML = renderLobby(state.profile); break;
+    case "ranks":        app.innerHTML = renderRanks(state.profile); break;
+    case "custom":       app.innerHTML = renderCustomSetup(); wireCustomSetup(); break;
+    case "achievements": app.innerHTML = renderAchievements(state.profile); break;
+    case "settings":     app.innerHTML = renderSettings(state.profile); wireSettings(); break;
+    default:             app.innerHTML = renderLobby(state.profile);
   }
   refreshHud();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -55,9 +62,9 @@ function navTo(screen) {
 // Delegated clicks for data-nav and data-play
 document.addEventListener("click", (e) => {
   const nav = e.target.closest("[data-nav]");
-  if (nav) { navTo(nav.dataset.nav); return; }
+  if (nav) { state.sfx.click(); navTo(nav.dataset.nav); return; }
   const play = e.target.closest("[data-play]");
-  if (play) { startMode(play.dataset.play); return; }
+  if (play) { state.sfx.click(); startMode(play.dataset.play); return; }
 });
 
 // ---------------------------------------------------------------------------
@@ -70,6 +77,8 @@ function buildConfig(mode, opts = {}) {
       return { mode, label: "RANKED", duration: 30, ranked: true, bot: makeBot(rankIdx) };
     case "classic":
       return { mode, label: "CLASSIC", duration: 30, ranked: false, bot: null };
+    case "practice":
+      return { mode, label: "PRACTICE", duration: 0, ranked: false, bot: null, endless: true };
     case "duel":
       return { mode, label: "DUEL · 1v1", duration: 25, ranked: true, bot: makeBot(rankIdx) };
     case "custom": {
@@ -110,6 +119,57 @@ function wireCustomSetup() {
   $("#custom-start").addEventListener("click", () => {
     state.pending = buildConfig("custom", { duration: dur, foe, skill });
     showMicPanel();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Settings screen
+// ---------------------------------------------------------------------------
+function wireSettings() {
+  const st = state.profile.settings;
+
+  $("#name-input").addEventListener("input", (e) => {
+    state.profile.name = e.target.value.trim().slice(0, 18) || "Player";
+    saveProfile(state.profile);
+  });
+
+  const sens = $("#set-sens");
+  sens.addEventListener("input", () => {
+    const v = +sens.value;
+    st.sensitivity = v;
+    state.clap.setSensitivity(v);
+    $("#set-sens-read").textContent = Math.round(v * 100) + "%";
+    saveProfile(state.profile);
+  });
+
+  $("#set-music").addEventListener("click", async (e) => {
+    const on = !st.musicOn;
+    st.musicOn = on; saveProfile(state.profile);
+    e.currentTarget.classList.toggle("on", on);
+    if (on) { await state.music.start().catch(() => {}); } else { state.music.stop(); }
+    musicBtn.classList.toggle("playing", state.music.playing);
+  });
+
+  $("#set-sfx").addEventListener("click", (e) => {
+    const on = !st.sfxOn;
+    st.sfxOn = on; state.sfx.setEnabled(on); saveProfile(state.profile);
+    e.currentTarget.classList.toggle("on", on);
+    if (on) state.sfx.click();
+  });
+
+  $("#set-cam").addEventListener("click", (e) => {
+    setCam(!state.camera.on);
+    // reflect after the async toggle settles
+    setTimeout(() => e.currentTarget.classList.toggle("on", state.camera.on), 200);
+  });
+
+  $("#reset-btn").addEventListener("click", () => {
+    if (!confirm("Reset ALL progress — rank, level, stats, achievements and history? This can't be undone.")) return;
+    state.profile = resetProfile();
+    state.clap.setSensitivity(state.profile.settings.sensitivity);
+    state.sfx.setEnabled(state.profile.settings.sfxOn);
+    toast("Progress reset — fresh start!", "🧼");
+    navTo("lobby");
   });
 }
 
@@ -202,6 +262,12 @@ function beginMatch() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 
   $("#arena-quit").addEventListener("click", () => {
+    state.sfx.click();
+    if (cfg.endless && state.match && state.match.running) {
+      // Practice: finish gracefully into the results screen.
+      state.match.end();
+      return;
+    }
     if (state.match) state.match.abort();
     cleanupInputs();
     navTo("lobby");
@@ -239,6 +305,7 @@ function runCountdown(done) {
   const step = () => {
     num.textContent = seq[i];
     num.style.animation = "none"; void num.offsetWidth; num.style.animation = "cdPop 0.9s var(--ease)";
+    if (seq[i] === "GO!") state.sfx.go(); else state.sfx.countdownBeep();
     i++;
     if (i < seq.length) setTimeout(step, 750);
     else setTimeout(() => { overlay.remove(); done(); }, 650);
@@ -266,7 +333,8 @@ function wireMatchEvents(match, cfg) {
   const foeCps = $("#foe-cps");
 
   match.addEventListener("clap", (e) => {
-    const { score, mult, strength } = e.detail;
+    const { score, mult, strength, combo } = e.detail;
+    state.sfx.clap(combo);
     if (scoreEl) {
       scoreEl.textContent = score.toLocaleString();
       scoreEl.classList.add("bump");
@@ -313,8 +381,8 @@ function wireMatchEvents(match, cfg) {
       foeCps.textContent = d.botCps;
     }
 
-    // Time warning flash
-    if (d.remain <= 5 && timerText.dataset.warn !== "1") {
+    // Time warning flash (timed modes only)
+    if (!d.endless && d.remain <= 5 && timerText.dataset.warn !== "1") {
       timerText.dataset.warn = "1";
       timerText.style.color = "var(--bad)";
     }
@@ -324,6 +392,7 @@ function wireMatchEvents(match, cfg) {
     cleanupInputs();
     const r = result.detail;
     if (r.knockout) {
+      state.sfx.knockout();
       koFlash(r.won);
       setTimeout(() => finishMatch(r), 1050);
     } else {
@@ -347,10 +416,28 @@ function cleanupInputs() {
 }
 
 function finishMatch(result) {
-  const before = { level: levelProgress(state.profile.xp).level };
+  // Grab a victory snapshot from the live cam before the stream is touched.
+  const snapshot = (state.camera.on && result.won) ? captureSnapshot() : null;
+
   const report = applyMatchResult(state.profile, result);
 
-  app.innerHTML = renderResults(result, report);
+  // Evaluate achievement unlocks against the freshly-updated profile.
+  const fresh = checkAchievements(state.profile, {
+    profile: state.profile,
+    result,
+    level: report.after.level,
+    rankIndex: state.profile.rankIndex,
+  });
+  if (fresh.length) saveProfile(state.profile);
+
+  // Result sound
+  if (result.hasOpponent && !result.knockout) {
+    result.won ? state.sfx.win() : state.sfx.lose();
+  } else if (!result.hasOpponent) {
+    state.sfx.win();
+  }
+
+  app.innerHTML = renderResults(result, report, snapshot);
   refreshHud();
   window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -363,11 +450,28 @@ function finishMatch(result) {
     if (rrBar) rrBar.style.width = state.profile.rr + "%";
   });
 
-  if (report.leveledUp) toast(`Level up! You're now Lv ${report.after.level}`, "⭐");
+  if (report.leveledUp) { toast(`Level up! You're now Lv ${report.after.level}`, "⭐"); state.sfx.levelUp(); }
   if (report.rankChange === 1) toast(`Ranked up to ${report.rankAfter.label}!`, "⬆️");
   if (report.rankChange === -1) toast(`Ranked down to ${report.rankAfter.label}`, "⬇️");
 
+  // Achievement unlock toasts (staggered so they don't overlap)
+  fresh.forEach((a, i) => setTimeout(() => {
+    toast(`Achievement unlocked — ${a.name}`, a.icon);
+    state.sfx.unlock();
+  }, 700 + i * 900));
+
   state.match = null;
+}
+
+function captureSnapshot() {
+  try {
+    const v = camVideo;
+    if (!v || !v.videoWidth) return null;
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.85);
+  } catch { return null; }
 }
 
 // ---------------------------------------------------------------------------

@@ -36,6 +36,7 @@ export class Match extends EventTarget {
   constructor(cfg) {
     super();
     this.cfg = cfg;
+    this.endless = !!cfg.endless;   // practice: no timer, ends on demand
     this.duration = cfg.duration;
     this.startAt = 0;
     this.endAt = 0;
@@ -119,11 +120,14 @@ export class Match extends EventTarget {
     return this.botClapTimes.length;
   }
 
+  end() { this._finish(); }   // manual finish (practice mode)
+
   _loop() {
     if (!this.running) return;
     const now = performance.now();
-    const remainMs = Math.max(0, this.endAt - now);
-    const remain = remainMs / 1000;
+    const elapsedMs = now - this.startAt;
+    const remainMs = this.endless ? Infinity : Math.max(0, this.endAt - now);
+    const remain = this.endless ? elapsedMs / 1000 : remainMs / 1000;
 
     // Combo cools if idle
     if (this.lastClapAt && now - this.lastClapAt > COMBO_DECAY_MS && this.combo > 0) {
@@ -141,7 +145,8 @@ export class Match extends EventTarget {
     this.dispatchEvent(new CustomEvent("tick", {
       detail: {
         remain,
-        remainPct: remainMs / (this.duration * 1000),
+        endless: this.endless,
+        remainPct: this.endless ? 1 : remainMs / (this.duration * 1000),
         score: this.score,
         cps,
         combo: this.combo,
@@ -153,7 +158,7 @@ export class Match extends EventTarget {
       },
     }));
 
-    if (remainMs <= 0) return this._finish();
+    if (!this.endless && remainMs <= 0) return this._finish();
     this.raf = requestAnimationFrame(() => this._loop());
   }
 
@@ -207,11 +212,12 @@ export class Match extends EventTarget {
     const result = {
       mode: this.cfg.mode,
       ranked: !!this.cfg.ranked,
+      practice: this.endless,
       score: this.score,
       totalClaps: this.totalClaps,
       peakCps: this.peakCps,
       peakCombo: this.peakCombo,
-      duration: this.duration,
+      duration: this.endless ? Math.round((performance.now() - this.startAt) / 1000) : this.duration,
       hasOpponent: !!this.bot,
       botScore: this.botScore,
       botName: this.bot ? this.bot.name : null,

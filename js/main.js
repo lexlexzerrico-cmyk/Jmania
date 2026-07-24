@@ -16,6 +16,11 @@ import { levelFromXp } from "./ranks.js";
 import { TITLES, titleById, unlockedTitles, grantTitle } from "./titles.js";
 import { questProgress, claimQuest, ensureQuests, questDef } from "./quests.js";
 import {
+  SKILLS, skillById, RARITIES, RARITY_ORDER, buildMods,
+  rollRarity, pickSkillOfRarity, DUST_VALUE, SUMMON_COST, SUMMON_COST_10,
+  STARTER_LOADOUT, TYPES,
+} from "./goons.js";
+import {
   earnJc, claimDaily, claimPlaytime, dailyInfo, playtimeInfo,
   buyBoost, buyPremium, grantGems, spendJc, boostActive, BOOST_MS,
 } from "./economy.js";
@@ -23,7 +28,8 @@ import {
   $, $$, toast, renderHud, renderLobby, renderRanks, renderCustomSetup,
   renderMicPanel, renderArena, renderResults, renderAchievements, renderSettings,
   renderShop, renderWorld, renderBossFight, renderBossResults, renderAdmin, renderVersus,
-  renderTutorial, initParticles,
+  renderTutorial, renderSummon, renderCollection, renderLoadout, goonCard, GOON_ICON,
+  initParticles,
 } from "./ui.js";
 
 const ADMIN_CODE = "JERKGOD";
@@ -40,6 +46,7 @@ const state = {
   fx: new FxEngine(),
   match: null,
   bossFight: null,
+  worldEventsOn: true,
   inputMode: "mic",     // "mic" | "keyboard"
   micReady: false,
   pending: null,        // pending match config while on mic panel
@@ -60,6 +67,7 @@ applyTheme(state.profile.settings.theme);
 // ---------------------------------------------------------------------------
 function refreshHud() {
   $("#profile-hud").innerHTML = renderHud(state.profile);
+  if (typeof syncAdminFab === "function") syncAdminFab();
 }
 
 function navTo(screen) {
@@ -78,6 +86,9 @@ function navTo(screen) {
     case "achievements": app.innerHTML = renderAchievements(state.profile); break;
     case "settings":     app.innerHTML = renderSettings(state.profile); wireSettings(); break;
     case "shop":         app.innerHTML = renderShop(state.profile); wireShop(); break;
+    case "summon":       app.innerHTML = renderSummon(state.profile); wireSummon(); break;
+    case "collection":   app.innerHTML = renderCollection(state.profile); break;
+    case "loadout":      app.innerHTML = renderLoadout(state.profile); wireLoadout(); break;
     case "world":        app.innerHTML = renderWorld(state.profile); wireWorld8Bit(); break;
     case "admin":
       if (!state.profile.adminUnlocked) { navTo("lobby"); return; }
@@ -171,6 +182,127 @@ function passcodeModal(onOk) {
   back.querySelector("#pc-ok").addEventListener("click", submit);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
   back.addEventListener("click", (e) => { if (e.target === back || e.target.closest("[data-no]")) back.remove(); });
+}
+
+// ---------------------------------------------------------------------------
+// Goon Skills — gacha, collection, loadout
+// ---------------------------------------------------------------------------
+function pull(count) {
+  const g = state.profile.goons;
+  const cost = count === 10 ? SUMMON_COST_10 : SUMMON_COST;
+  if ((g.clapCoins || 0) < cost) { toast("Not enough Clap Coins", "🪙"); return null; }
+  g.clapCoins -= cost;
+  g.gacha.luck = (g.gacha.luck || 0);
+  const results = [];
+  const n = count === 10 ? 10 : 1;
+  let guaranteedRare = count === 10; // 10x guarantees at least Rare+
+  for (let i = 0; i < n; i++) {
+    let rarity = rollRarity(g.gacha);
+    if (guaranteedRare && i === n - 1 && ["common", "uncommon"].includes(rarity)) rarity = "rare";
+    if (["rare", "epic", "legendary", "artifact"].includes(rarity)) guaranteedRare = false;
+    const skill = pickSkillOfRarity(rarity, false);
+    const already = g.owned[skill.id] || 0;
+    const isNew = already === 0;
+    let dust = 0;
+    if (isNew) { g.owned[skill.id] = 1; }
+    else { g.owned[skill.id] = already + 1; dust = DUST_VALUE[skill.rarity] || 5; g.dust = (g.dust || 0) + dust; }
+    results.push({ skill, isNew, dust });
+    g.history.unshift({ id: skill.id, r: skill.rarity, ts: Date.now(), isNew });
+  }
+  g.history = g.history.slice(0, 40);
+  saveProfile(state.profile);
+  return results;
+}
+
+function wireSummon() {
+  const s1 = $("#summon-1"), s10 = $("#summon-10");
+  if (s1 && !s1.disabled) s1.addEventListener("click", () => doSummon(1));
+  if (s10 && !s10.disabled) s10.addEventListener("click", () => doSummon(10));
+}
+
+function doSummon(count) {
+  const results = pull(count);
+  if (!results) return;
+  state.sfx.click();
+  showReveal(results, 0);
+}
+
+function showReveal(results, idx) {
+  const reduced = state.profile.settings.reducedMotion;
+  const back = document.createElement("div");
+  back.className = "modal-back reveal-back";
+  document.body.appendChild(back);
+
+  const renderOne = (i) => {
+    const { skill, isNew, dust } = results[i];
+    const r = RARITIES[skill.rarity];
+    // rarity build-up sound
+    const tierIdx = RARITY_ORDER.indexOf(skill.rarity);
+    if (tierIdx >= 4) state.sfx.win(); else if (tierIdx >= 2) state.sfx.jcGain(); else state.sfx.click();
+    if (!reduced) state.fx.burst(innerWidth / 2, innerHeight * 0.42, effectById("rainbow"), 1, 10 + tierIdx * 4);
+    back.innerHTML = `
+      <div class="reveal-card">
+        <div class="reveal-flash rar-${skill.rarity}" style="--rc:${r.color};--rg:${r.glow}"></div>
+        ${goonCard(skill, { isNew, owned: state.profile.goons.owned[skill.id] })}
+        ${dust ? `<div class="reveal-dust">Duplicate → +${dust} ✨ Goon Dust</div>` : ""}
+        <div class="reveal-progress">${i + 1} / ${results.length}</div>
+        <div class="row" style="justify-content:center;margin-top:10px">
+          ${results.length > 1 ? `<button class="btn ghost" id="reveal-skip">Skip all</button>` : ""}
+          <button class="btn" id="reveal-next">${i + 1 < results.length ? "Next" : "Done"}</button>
+        </div>
+      </div>`;
+    back.querySelector("#reveal-next").addEventListener("click", () => {
+      state.sfx.click();
+      if (i + 1 < results.length) renderOne(i + 1);
+      else finishReveal();
+    });
+    const skip = back.querySelector("#reveal-skip");
+    if (skip) skip.addEventListener("click", () => { state.sfx.click(); finishReveal(); });
+  };
+  const finishReveal = () => {
+    back.remove();
+    const newCount = results.filter((r) => r.isNew).length;
+    const dustTotal = results.reduce((s, r) => s + r.dust, 0);
+    if (newCount) toast(`${newCount} new Goon${newCount > 1 ? "s" : ""} added!`, "🃏");
+    if (dustTotal) toast(`+${dustTotal} Goon Dust from duplicates`, "✨");
+    navTo("summon");
+  };
+  renderOne(idx);
+}
+
+function wireLoadout() {
+  app.addEventListener("click", function loClick(e) {
+    const opt = e.target.closest("[data-equip-slot]");
+    if (opt) {
+      const slot = opt.dataset.equipSlot;
+      const id = opt.dataset.equipId || null;
+      // a skill can only occupy its own type slot; also prevent same card twice
+      if (id) {
+        const sk = skillById(id);
+        if (!sk || sk.type !== slot) return;
+        for (const t of TYPES) if (t !== slot && state.profile.goons.loadout[t] === id) state.profile.goons.loadout[t] = null;
+      }
+      state.profile.goons.loadout[slot] = id;
+      saveProfile(state.profile);
+      state.sfx.click();
+      app.removeEventListener("click", loClick);
+      navTo("loadout");
+      return;
+    }
+    const rec = e.target.closest("#recommend-loadout");
+    if (rec) {
+      const g = state.profile.goons;
+      for (const slot in STARTER_LOADOUT) {
+        const id = STARTER_LOADOUT[slot];
+        if (g.owned[id]) g.loadout[slot] = id;
+      }
+      saveProfile(state.profile);
+      state.sfx.win();
+      toast("Recommended starter loadout equipped", "✨");
+      app.removeEventListener("click", loClick);
+      navTo("loadout");
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -764,6 +896,108 @@ function wireAdmin() {
 function xpTarget(level) { return Math.round(120 * Math.pow(level - 1, 1.55)); }
 
 // ---------------------------------------------------------------------------
+// Floating admin console — a button + overlay usable on ANY screen, including
+// mid-match. Opens over whatever you're doing so you can "admin abuse" live.
+// ---------------------------------------------------------------------------
+const adminFab = $("#admin-fab");
+const adminOverlay = $("#admin-overlay");
+
+function syncAdminFab() {
+  adminFab.classList.toggle("hidden", !state.profile.adminUnlocked);
+}
+
+adminFab.addEventListener("click", () => {
+  if (!state.profile.adminUnlocked) return;
+  adminOverlay.classList.toggle("hidden");
+  if (!adminOverlay.classList.contains("hidden")) buildAdminOverlay();
+});
+
+function buildAdminOverlay() {
+  const p = state.profile;
+  const q = (id, icon, label) => `<button class="afab-btn" id="${id}"><span>${icon}</span>${label}</button>`;
+  adminOverlay.innerHTML = `
+    <div class="afab-panel">
+      <div class="afab-title">🛠️ QUICK ADMIN <button class="afab-close" id="afab-x">✕</button></div>
+      <div class="afab-grid">
+        ${q("fab-jc", "💰", "+10k JC")}
+        ${q("fab-coins", "🪙", "+5k Clap Coins")}
+        ${q("fab-drop", "🌧️", "JC Drop")}
+        ${q("fab-god", "🙏", p.godClap ? "God Clap ON" : "God Clap OFF")}
+        ${q("fab-effect", "💥", "Test Effect")}
+        ${q("fab-susanoo", "👹", "Susanoo")}
+        ${q("fab-win", "🏆", "Win Match")}
+        ${q("fab-event", state.worldEventsOn ? "🎲" : "🚫", state.worldEventsOn ? "Events ON" : "Events OFF")}
+        ${q("fab-goons", "🃏", "Unlock Goons")}
+        ${q("fab-lvl", "⭐", "+10 Levels")}
+        ${q("fab-full", "🖥️", "Full Console")}
+        ${q("fab-target", "🎯", "Admin Another")}
+      </div>
+    </div>`;
+  const on = (id, fn) => { const el = $("#" + id); if (el) el.addEventListener("click", () => { fn(); state.sfx.click(); }); };
+  on("afab-x", () => adminOverlay.classList.add("hidden"));
+  on("fab-jc", () => { p.jc += 10000; saveProfile(p); refreshHud(); toast("+10,000 JC", "💰"); });
+  on("fab-coins", () => { p.goons.clapCoins += 5000; saveProfile(p); toast("+5,000 Clap Coins", "🪙"); });
+  on("fab-drop", () => { p.jc += 500; saveProfile(p); state.fx.coinRain(80); state.sfx.jcGain(); refreshHud(); });
+  on("fab-god", () => { p.godClap = !p.godClap; saveProfile(p); toast(`God Clap ${p.godClap ? "ON" : "OFF"}`, "🙏"); buildAdminOverlay(); });
+  on("fab-effect", () => { const a = effectById(p.equippedAura); state.fx.burst(innerWidth / 2, innerHeight / 2, a, 1, 20); state.sfx.aura(a.sfx, 20); });
+  on("fab-susanoo", () => { state.fx.guardianFlash(); state.sfx.aura("vboom"); });
+  on("fab-win", () => {
+    if (state.match && state.match.running) { state.match.tug = 100; state.match._finish ? state.match._finish() : state.match.end(); }
+    else if (state.bossFight && state.bossFight.running) { state.bossFight.hp = 0; state.bossFight._finish(true); }
+    else toast("No active match", "🤷");
+    adminOverlay.classList.add("hidden");
+  });
+  on("fab-event", () => { state.worldEventsOn = !state.worldEventsOn; if (state.world8) state.world8.eventsOn = state.worldEventsOn; toast(`World events ${state.worldEventsOn ? "ON" : "OFF"}`, "🎲"); buildAdminOverlay(); });
+  on("fab-goons", () => { SKILLS.forEach((s) => { p.goons.owned[s.id] = Math.max(1, p.goons.owned[s.id] || 0); }); saveProfile(p); toast("All Goons unlocked", "🃏"); });
+  on("fab-lvl", () => { const lp = levelProgress(p.xp); p.xp = xpTarget(lp.level + 10); saveProfile(p); refreshHud(); toast(`Level ${lp.level + 10}`, "⭐"); });
+  on("fab-full", () => { adminOverlay.classList.add("hidden"); navTo("admin"); });
+  on("fab-target", () => { adminOverlay.classList.add("hidden"); adminTargetModal(); });
+}
+
+// "Admin another person" — apply an admin action to a named profile export you
+// paste in (offline stand-in for account targeting, since there's no backend).
+function adminTargetModal() {
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.innerHTML = `
+    <div class="modal">
+      <h3>🎯 Admin Another Player</h3>
+      <div class="modal-note">There's no online backend, so you can act on another player's <b>save code</b>: have them paste their code (Settings → Export), edit it here, and hand it back. Paste a save code to grant them a title / coins.</div>
+      <textarea class="text-input" id="tgt-code" rows="3" placeholder="paste their save code…" style="resize:vertical;font-family:monospace;font-size:11px"></textarea>
+      <div class="chip-row" style="margin-top:10px">
+        <button class="chip" data-tgt="jc">+10k JC</button>
+        <button class="chip" data-tgt="tester">Grant TESTER</button>
+        <button class="chip" data-tgt="dev">Grant DEVELOPER</button>
+        <button class="chip" data-tgt="jowy">Grant JOWY</button>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:14px">
+        <button class="btn ghost" data-no>Close</button>
+        <button class="btn" id="tgt-apply">Apply → new code</button>
+      </div>
+      <div id="tgt-out" style="margin-top:12px"></div>
+    </div>`;
+  document.body.appendChild(back);
+  let action = "jc";
+  back.querySelectorAll("[data-tgt]").forEach((b) => b.addEventListener("click", () => {
+    action = b.dataset.tgt;
+    back.querySelectorAll("[data-tgt]").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+  }));
+  back.querySelector("#tgt-apply").addEventListener("click", () => {
+    try {
+      const code = back.querySelector("#tgt-code").value.trim();
+      const prof = JSON.parse(decodeURIComponent(escape(atob(code))));
+      if (action === "jc") prof.jc = (prof.jc || 0) + 10000;
+      else { if (!Array.isArray(prof.titles)) prof.titles = []; if (!prof.titles.includes(action)) prof.titles.push(action); prof.equippedTitle = action; }
+      const out = btoa(unescape(encodeURIComponent(JSON.stringify(prof))));
+      back.querySelector("#tgt-out").innerHTML = `<div class="modal-note">Hand this new code back to them (Settings → Import):</div><textarea class="text-input" rows="3" readonly style="font-family:monospace;font-size:10px">${out}</textarea>`;
+      state.sfx.win();
+    } catch { toast("That's not a valid save code", "🚫"); }
+  });
+  back.addEventListener("click", (e) => { if (e.target === back || e.target.closest("[data-no]")) back.remove(); });
+}
+
+// ---------------------------------------------------------------------------
 // Mic panel / calibration
 // ---------------------------------------------------------------------------
 function showMicPanel() {
@@ -890,6 +1124,9 @@ function beginMatch() {
   });
 
   // Countdown, then start
+  // Equip the player's Goon loadout into this match (capped effects).
+  cfg.loadoutMods = buildMods(state.profile.goons.loadout, { mode: cfg.mode, ranked: cfg.ranked });
+
   runCountdown(() => {
     const match = new Match(cfg);
     state.match = match;
@@ -1099,9 +1336,21 @@ function finishMatch(result) {
 
   const report = applyMatchResult(state.profile, result);
 
+  // Keyboard mode is far easier to spam than real claps, so it earns way less.
+  const kbScale = state.inputMode === "keyboard" ? 0.3 : 1;
+  result.inputMode = state.inputMode;
+
   // Jerk Coins for completing the game (boost/premium multipliers apply).
-  const jcReport = earnJc(state.profile, result);
+  const jcReport = earnJc(state.profile, result, 0, kbScale);
   if (result.won) { state.sfx.jcGain(); state.fx.coinRain(Math.min(40, 10 + Math.round(jcReport.total / 20))); }
+
+  // Clap Coins (gacha currency) + economy-skill bonuses from the loadout.
+  const mods = result.loadoutMods || buildMods(state.profile.goons.loadout, { mode: result.mode, ranked: result.ranked });
+  const baseCoins = Math.round((30 + result.totalClaps * 0.6 + (result.won ? 20 : 6)) * kbScale);
+  const coins = Math.round(baseCoins * (1 + (mods.coinPct || 0)));
+  state.profile.goons.clapCoins = (state.profile.goons.clapCoins || 0) + coins;
+  if (mods.dust) state.profile.goons.dust = (state.profile.goons.dust || 0) + mods.dust;
+  result._clapCoins = coins;
 
   // Daily quest progress + title auto-unlocks + per-mode best.
   questProgress(state.profile, result);

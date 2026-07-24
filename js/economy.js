@@ -31,16 +31,17 @@ export function jcMultiplier(p) {
   return m;
 }
 
-/** Award JC for a finished match/boss. Returns { base, total, mult }. */
-export function earnJc(p, result, bossRewardJc = 0) {
+/** Award JC for a finished match/boss. Returns { base, total, mult }.
+ *  `scale` (e.g. 0.3 for keyboard mode) reduces the payout. */
+export function earnJc(p, result, bossRewardJc = 0, scale = 1) {
   const base = Math.max(1, Math.round(
-    result.score * 0.04 + result.totalClaps * 0.4 + (result.won ? 25 : 8)
-  ) + bossRewardJc);
+    (result.score * 0.04 + result.totalClaps * 0.4 + (result.won ? 25 : 8)) * scale
+  ) + Math.round(bossRewardJc * scale));
   const mult = jcMultiplier(p);
   const total = Math.round(base * mult);
   p.jc = (p.jc || 0) + total;
   saveProfile(p);
-  return { base, total, mult };
+  return { base, total, mult, scale };
 }
 
 // ---- Daily reward ----------------------------------------------------------

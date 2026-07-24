@@ -19,6 +19,7 @@ const COMBO_DECAY_MS = 700;   // no clap for this long => combo cools down
 export const MAX_MULT = 2;    // hard cap — earn every point
 export const MULT_STEP = 0.05; // slow ramp: 20-clap combo to reach x2
 const MAX_LEGIT_CPS = 16;     // anti-autoclicker: humans top out around here
+const SKILL_SCORE_CAP = 0.15; // Goon Skills add at most +15% (mirror of goons.js)
 
 export function comboToMult(combo) {
   return Math.min(MAX_MULT, 1 + combo * MULT_STEP);
@@ -79,9 +80,80 @@ export class Match extends EventTarget {
     this._pulses = [];            // perfect-timing beat times
     this._nextPulseWarned = false;
     this.perfects = 0;
-    this.breakdown = { base: 0, burst: 0, perfect: 0, penalty: 0 };
+    this.breakdown = { base: 0, burst: 0, perfect: 0, penalty: 0, goons: 0 };
+
+    // ---- Goon Skills loadout ----
+    this.mods = cfg.loadoutMods || null;
+    this.goonBonus = 0;
+    this.goonContrib = {};   // skillId -> points contributed
+    this.goon = {
+      shieldsLeft: this.mods ? this.mods.shieldSaves : 0,
+      rhythmStreak: 0, lastGap: 0,
+      odCharge: 0, odActiveUntil: 0, odCdUntil: 0,
+      multStacks: 0, burstUsed: 0,
+    };
+
     // Live events only in solo timed modes (keeps 1v1 clean).
     if (!this.endless && !this.bot && this.duration >= 15) this._planEvents();
+  }
+
+  _addGoon(id, pts) {
+    this.goonBonus += pts;
+    this.goonContrib[id] = (this.goonContrib[id] || 0) + pts;
+  }
+
+  // Apply equipped-skill effects to a clap. Returns bonus points (uncapped;
+  // the total is capped at _finish so a build can't exceed the balance limit).
+  _applyGoons(basePts, now, gap, perfect) {
+    const m = this.mods;
+    if (!m) return 0;
+    let bonus = 0;
+    const g = this.goon;
+
+    // Rhythm: reward steady tempo (gaps within ~35% of the last)
+    if (m.rhythmPct > 0) {
+      if (g.lastGap && gap < 700 && Math.abs(gap - g.lastGap) < g.lastGap * 0.35) g.rhythmStreak++;
+      else g.rhythmStreak = 0;
+      if (g.rhythmStreak >= m.rhythmNeed) {
+        const add = Math.round(basePts * m.rhythmPct);
+        bonus += add; this._addGoon("rhythm", add);
+      }
+    }
+    g.lastGap = gap < 2000 ? gap : g.lastGap;
+
+    // Burst: bonus on PERFECT hits, respecting the per-match cap
+    if (perfect && m.burstBonus > 0 && g.burstUsed < m.burstCap) {
+      const add = Math.min(m.burstBonus, m.burstCap - g.burstUsed);
+      g.burstUsed += add; bonus += add; this._addGoon("burst", add);
+      // Overdrive charge on perfects
+      if (m.overdrive && now > g.odCdUntil) {
+        g.odCharge++;
+        if (g.odCharge >= m.overdrive.charge) {
+          g.odCharge = 0;
+          g.odActiveUntil = now + m.overdrive.durMs;
+          g.odCdUntil = now + m.overdrive.durMs + m.overdrive.cdMs;
+          this.dispatchEvent(new CustomEvent("overdrive", { detail: { durMs: m.overdrive.durMs } }));
+        }
+      }
+    }
+
+    // Overdrive active boost
+    if (m.overdrive && now < g.odActiveUntil) {
+      const add = Math.round(basePts * m.overdrive.boostPct);
+      bonus += add; this._addGoon("overdrive", add);
+    }
+
+    // Conditional multipliers (combo thresholds)
+    for (const r of m.multRules) {
+      const need = r.condition && r.condition.startsWith("combo") ? parseInt(r.condition.slice(5), 10) : 0;
+      if (this.combo >= need) {
+        let pct = r.pct;
+        if (r.stackEvery) pct = Math.min(r.maxPct || r.pct, r.pct * (1 + Math.floor(this.combo / r.stackEvery)));
+        const add = Math.round(basePts * pct);
+        bonus += add; this._addGoon("mult", add);
+      }
+    }
+    return bonus;
   }
 
   _planEvents() {
@@ -120,9 +192,18 @@ export class Match extends EventTarget {
     this.lastClapAt = now;
 
     // Combo: sustained fast clapping ramps the multiplier
-    if (gap < FAST_GAP_MS) this.combo += 1;
+    if (gap < FAST_GAP_MS) this.combo += 1 + (this.mods && this.mods.comboFaster ? (Math.random() < this.mods.comboFaster ? 1 : 0) : 0);
     else if (gap < COMBO_DECAY_MS) this.combo = Math.max(0, this.combo - 1);
-    else this.combo = 0;
+    else {
+      // Combo drop — a Goon combo-shield can soften it.
+      if (this.combo >= 8 && this.goon && this.goon.shieldsLeft > 0) {
+        this.goon.shieldsLeft--;
+        this.combo = Math.round(this.combo * (1 - this.mods.shieldReduce));
+        this.dispatchEvent(new CustomEvent("shieldsave", { detail: { left: this.goon.shieldsLeft } }));
+      } else {
+        this.combo = 0;
+      }
+    }
 
     this.mult = comboToMult(this.combo);
 
@@ -143,6 +224,13 @@ export class Match extends EventTarget {
     let pts = Math.round(BASE_POINTS * this.mult * (0.65 + strength * 0.35) * eventMult);
     if (perfect && eventMult > 0) { pts += 25; this.perfects += 1; this.breakdown.perfect += 25; }
     if (eventMult === 2) this.breakdown.burst += Math.round(pts / 2);
+
+    // Goon Skills bonus (capped at finish); silence hazard suppresses it.
+    if (this.mods && eventMult > 0) {
+      const gb = this._applyGoons(pts, now, gap, perfect);
+      pts += gb;
+    }
+
     this.breakdown.base += pts;
     this.score += pts;
     this.totalClaps += 1;
@@ -277,6 +365,27 @@ export class Match extends EventTarget {
     if (this.raf) cancelAnimationFrame(this.raf);
     if (this._botTimer) clearTimeout(this._botTimer);
 
+    // ---- Goon end-of-match bonuses + the +15% balance cap ----
+    if (this.mods) {
+      // per-PERFECT end bonus
+      if (this.mods.perPerfect > 0) {
+        const add = this.mods.perPerfect * this.perfects;
+        this.score += add; this._addGoon("encore", add);
+      }
+      // Cap total goon contribution so a build can't exceed the limit.
+      const base = Math.max(1, this.score - this.goonBonus);
+      const maxGoon = base * SKILL_SCORE_CAP;
+      if (this.goonBonus > maxGoon) {
+        const cut = Math.round(this.goonBonus - maxGoon);
+        this.score -= cut;
+        this.goonBonus = Math.round(maxGoon);
+        // scale contributions down proportionally for honest attribution
+        const factor = maxGoon / (this.goonBonus + cut || 1);
+        for (const k in this.goonContrib) this.goonContrib[k] = Math.round(this.goonContrib[k] * factor);
+      }
+      this.breakdown.goons = Math.round(this.goonBonus);
+    }
+
     // 1v1 is decided by the clash bar (knockout, or who owns more of it at
     // time-out). Solo modes always "win" (it's a high-score run).
     let won, margin;
@@ -307,6 +416,9 @@ export class Match extends EventTarget {
       foeBar: Math.round(100 - this.tug),
       perfects: this.perfects,
       breakdown: this.breakdown,
+      goonBonus: Math.round(this.goonBonus || 0),
+      goonContrib: this.goonContrib || {},
+      loadoutMods: this.mods || null,
     };
     this.dispatchEvent(new CustomEvent("end", { detail: result }));
   }

@@ -10,6 +10,10 @@ import { gradeFor, GRADES } from "./grade.js";
 import { TITLES, titleById, unlockedTitles, titleChip } from "./titles.js";
 import { ensureQuests, questDef } from "./quests.js";
 import {
+  SKILLS, RARITIES, RARITY_ORDER, skillById, TYPES,
+  SUMMON_COST, SUMMON_COST_10, PITY, DUST_VALUE, STARTER_LOADOUT,
+} from "./goons.js";
+import {
   dailyInfo, playtimeInfo, boostActive, boostRemainMin,
   BOOST_COST_GEMS, PREMIUM_COST_GEMS,
 } from "./economy.js";
@@ -211,6 +215,13 @@ export function renderLobby(profile) {
         <h3>Shop</h3>
         <p>Spend Jerk Coins on auras — fire, ice, thunder, void — each with its own clap effects and sounds.</p>
         <div class="mc-go">Browse <span class="arrow">→</span></div>
+      </div>
+      <div class="mode-card" style="--mc:rgba(255,61,159,0.32)" data-nav="summon">
+        <span class="mc-tag">${Object.keys(profile.goons?.owned || {}).length}/${SKILLS.length}</span>
+        <div class="mc-icon">🃏</div>
+        <h3>Goon Skills</h3>
+        <p>Collect animated skill cards, equip a 3-slot loadout, and change how every match plays. Summon with Clap Coins.</p>
+        <div class="mc-go">Summon <span class="arrow">→</span></div>
       </div>
       <div class="mode-card custom" data-play="custom">
         <span class="mc-tag">Your rules</span>
@@ -706,6 +717,8 @@ export function renderResults(result, report, snapshot = null, jcReport = null) 
         <div class="rb"><div class="v">${result.perfects || 0}</div><div class="l">Perfects</div></div>
       </div>
 
+      ${renderGoonResults(result)}
+
       <div class="reward-row">
         ${jcReport ? `
         <div class="reward">
@@ -1036,6 +1049,167 @@ export function renderAdmin(profile) {
     </div>
    </div>
    </div>
+  </section>`;
+}
+
+// Results: which equipped Goon Skills contributed
+function renderGoonResults(result) {
+  const mods = result.loadoutMods;
+  if (!mods || !mods.sources || !mods.sources.length) return "";
+  const total = result.goonBonus || 0;
+  const rows = mods.sources.map((id) => {
+    const s = skillById(id);
+    if (!s) return "";
+    const active = total > 0; // whole-loadout attribution
+    return `<span class="goon-chip ${active ? "on" : ""}" style="--rc:${RARITIES[s.rarity].color}">${GOON_ICON[id] || "🃏"} ${escapeHtml(s.name)}</span>`;
+  }).join("");
+  return `
+    <div class="goon-results">
+      <div class="gr-head">🃏 Goon Skills ${total ? `<b style="color:var(--good)">+${total.toLocaleString()} pts</b>` : `<span style="color:var(--text-faint)">no proc this run</span>`}</div>
+      <div class="gr-chips">${rows}</div>
+    </div>`;
+}
+
+// ---- Goon Skill cards ------------------------------------------------------
+export function goonCard(skill, { owned = 0, equipped = false, isNew = false, compact = false, locked = false } = {}) {
+  const r = RARITIES[skill.rarity];
+  const holo = r.holo ? "holo" : r.rainbow ? "rainbow" : "";
+  return `
+    <div class="goon-card rar-${skill.rarity} ${holo} ${equipped ? "equipped" : ""} ${locked ? "locked" : ""} ${compact ? "compact" : ""}"
+         style="--rc:${r.color};--rg:${r.glow}" data-skill="${skill.id}">
+      ${isNew ? `<span class="goon-new">NEW!</span>` : ""}
+      ${owned > 1 ? `<span class="goon-dupe">×${owned}</span>` : ""}
+      <div class="goon-top">
+        <span class="goon-type">${skill.type}</span>
+        <span class="goon-tag">${skill.tag}</span>
+      </div>
+      <div class="goon-art"><span class="goon-emoji">${GOON_ICON[skill.id] || "🃏"}</span></div>
+      <div class="goon-name">${locked ? "???" : escapeHtml(skill.name)}</div>
+      <div class="goon-rarity" style="color:${r.color}">${r.name}</div>
+      ${compact ? "" : `<div class="goon-flavor">${locked ? "Not yet discovered." : escapeHtml(skill.flavor)}</div>
+      <div class="goon-effect">${locked ? "" : escapeHtml(skill.effect)}</div>`}
+      ${equipped ? `<div class="goon-eqbadge">✓ EQUIPPED</div>` : ""}
+    </div>`;
+}
+
+const GOON_ICON = {
+  metronome: "🎚️", warmhands: "🧤", steadyhands: "✋", lintroller: "🧻", spare1up: "🍄", snackbreak: "🍬",
+  tinytempo: "🎵", secondwind: "💨", couchgoblin: "👺", focusfingers: "🧿", pocketsand: "🏜️", steadyheart: "❤️",
+  greenstreak: "📗", cleanhands: "🧼", comboglue: "🧴", burstpack: "🔋", loosechange: "🪙", reboundking: "🔄",
+  gymtimer: "⏲️", luckycricket: "🦗", dustbunny: "🐇", finisher: "🏁", trashtalk: "🗯️", quickstep: "👟",
+  combobandage: "🩹", beatreader: "📖", flowstate: "🌊", risktaker: "🎲", shopkeeper: "🏪", momentumcore: "⚙️",
+  safetynet: "🕸️", goldenreroll: "🔁", encore: "🎤", adrenaline: "💉", cooldownchip: "🧊",
+  turbogoblin: "👹", chainlink: "🔗", metrognome: "🧙", doubledown: "🃏", phoenix: "🔥", hotstreak: "♨️",
+  luckydragon: "🐉", precisionist: "🎯", gambit: "♟️", sharingclap: "🌀",
+  neonconductor: "🪄", ninetailscloak: "🦊", rasenburst: "🌀", guardianstance: "🛡️", overclock: "⚡",
+  goldentempo: "🥇", jackpotheart: "💛", lastdance: "💃",
+  forbiddenmetro: "⛓️", susanooheart: "👺", singularity: "🕳️", bankaicrescent: "🌙", domainseal: "🔮",
+  phoenixcore: "🕊️", kingsgambit: "👑", fourdayfiend: "🌈", eventhorizon: "🌌",
+};
+export { GOON_ICON };
+
+// ---- Summon screen ---------------------------------------------------------
+export function renderSummon(profile) {
+  const g = profile.goons;
+  const rareLeft = PITY.rare - (g.gacha.sinceRare % PITY.rare);
+  const epicLeft = PITY.epic - (g.gacha.sinceEpic % PITY.epic);
+  const legLeft = PITY.legByArt - (g.gacha.sinceLeg % PITY.legByArt);
+  const collected = Object.keys(g.owned).length;
+  return `
+  <section class="screen">
+    <div class="section-title"><h2>🃏 Summon Goons</h2><span class="sub">collect skill cards</span></div>
+
+    <div class="summon-hero">
+      <div class="summon-banner">
+        <div class="sb-title">STANDARD BANNER</div>
+        <div class="sb-sub">All permanent Goons · fair pity</div>
+        <div class="sb-rates">Common 52% · Uncommon 27% · Rare 13% · Epic 5.5% · Legendary 2% · Artifact 0.5%</div>
+      </div>
+      <div class="summon-wallet">
+        <div class="sw-chip">🪙 <b>${(g.clapCoins || 0).toLocaleString()}</b> Clap Coins</div>
+        <div class="sw-chip">✨ <b>${(g.dust || 0).toLocaleString()}</b> Goon Dust</div>
+        <div class="sw-chip">📚 <b>${collected}/${SKILLS.filter((s)=>!s.limited).length}</b> collected</div>
+      </div>
+      <div class="pity-row">
+        <div class="pity-item"><span>Rare guaranteed in</span><b>${rareLeft}</b></div>
+        <div class="pity-item"><span>Epic+ in</span><b>${epicLeft}</b></div>
+        <div class="pity-item"><span>Legendary/Artifact in</span><b>${legLeft}</b></div>
+      </div>
+      <div class="summon-buttons">
+        <button class="btn big" id="summon-1" ${(g.clapCoins||0) < SUMMON_COST ? "disabled" : ""}>Summon ×1 · 🪙 ${SUMMON_COST}</button>
+        <button class="btn big cyan" id="summon-10" ${(g.clapCoins||0) < SUMMON_COST_10 ? "disabled" : ""}>Summon ×10 · 🪙 ${SUMMON_COST_10}</button>
+      </div>
+      <div class="summon-note">Duplicates convert to Goon Dust automatically. Earn Clap Coins by playing.</div>
+    </div>
+
+    <div class="center mt-24">
+      <button class="btn ghost" data-nav="collection">📚 Collection</button>
+      <button class="btn ghost" data-nav="loadout">🎴 Loadout</button>
+      <button class="btn ghost" data-nav="lobby">← Back</button>
+    </div>
+  </section>`;
+}
+
+// ---- Collection book -------------------------------------------------------
+export function renderCollection(profile) {
+  const g = profile.goons;
+  const groups = RARITY_ORDER.map((rk) => {
+    const skills = SKILLS.filter((s) => s.rarity === rk);
+    const cards = skills.map((s) => {
+      const owned = g.owned[s.id] || 0;
+      return goonCard(s, { owned, compact: true, locked: owned === 0 && s.limited && !ownedLimited(g, s.id), equipped: isEquipped(g, s.id) });
+    }).join("");
+    const have = skills.filter((s) => g.owned[s.id]).length;
+    return `
+      <div class="col-group">
+        <div class="col-head" style="color:${RARITIES[rk].color}">${RARITIES[rk].name} <span>${have}/${skills.length}</span></div>
+        <div class="goon-grid">${cards}</div>
+      </div>`;
+  }).join("");
+  return `
+  <section class="screen">
+    <div class="section-title"><h2>📚 Collection</h2><span class="sub">${Object.keys(g.owned).length} / ${SKILLS.length} discovered</span></div>
+    ${groups}
+    <div class="center mt-24">
+      <button class="btn ghost" data-nav="summon">🃏 Summon</button>
+      <button class="btn ghost" data-nav="lobby">← Back</button>
+    </div>
+  </section>`;
+}
+function ownedLimited(g, id) { return !!g.owned[id]; }
+function isEquipped(g, id) { return g.loadout.momentum === id || g.loadout.technique === id || g.loadout.wildcard === id; }
+
+// ---- Loadout ---------------------------------------------------------------
+export function renderLoadout(profile) {
+  const g = profile.goons;
+  const slot = (type) => {
+    const id = g.loadout[type];
+    const s = id ? skillById(id) : null;
+    const owned = SKILLS.filter((x) => x.type === type && g.owned[x.id]);
+    return `
+      <div class="lo-slot">
+        <div class="lo-slot-label">${type}</div>
+        <div class="lo-current">${s ? goonCard(s, { compact: true, equipped: true }) : `<div class="lo-empty">Empty slot</div>`}</div>
+        <div class="lo-options">
+          <button class="lo-opt ${!id ? "active" : ""}" data-equip-slot="${type}" data-equip-id="">— none —</button>
+          ${owned.map((x) => `<button class="lo-opt ${id === x.id ? "active" : ""}" data-equip-slot="${type}" data-equip-id="${x.id}" style="--rc:${RARITIES[x.rarity].color}">${GOON_ICON[x.id] || "🃏"} ${escapeHtml(x.name)}</button>`).join("")}
+        </div>
+      </div>`;
+  };
+  return `
+  <section class="screen">
+    <div class="section-title"><h2>🎴 Loadout</h2><span class="sub">1 Momentum · 1 Technique · 1 Wildcard</span></div>
+    <div class="center" style="margin-bottom:16px"><button class="btn" id="recommend-loadout">✨ Recommended starter loadout</button></div>
+    <div class="loadout-grid">
+      ${slot("momentum")}
+      ${slot("technique")}
+      ${slot("wildcard")}
+    </div>
+    <div class="center mt-24">
+      <button class="btn ghost" data-nav="summon">🃏 Summon</button>
+      <button class="btn ghost" data-nav="collection">📚 Collection</button>
+      <button class="btn ghost" data-nav="lobby">← Back</button>
+    </div>
   </section>`;
 }
 

@@ -2,8 +2,10 @@
    storage.js — profile persistence + progression logic
    ============================================================ */
 import { levelFromXp, rankFromIndex, RR_PER_DIVISION, MAX_RANK_INDEX } from "./ranks.js";
+import { SKILLS, STARTER_LOADOUT, STARTER_OWNED } from "./goons.js";
 
 const KEY = "jerkmania.profile.v1";
+const SCHEMA_VERSION = 2;   // bump when the profile shape changes
 
 const DEFAULT_PROFILE = {
   name: "Player",
@@ -41,6 +43,18 @@ const DEFAULT_PROFILE = {
   tutorialSeen: false,
   micCalibrated: false,
   noiseFloor: 0,         // saved calibration baseline
+  // Goon Skills (collectible cards)
+  goons: {
+    owned: {},           // { skillId: count }
+    loadout: { momentum: null, technique: null, wildcard: null },
+    clapCoins: 0,        // gacha currency (separate from JC)
+    dust: 0,             // duplicate-craft currency
+    gacha: { sinceRare: 0, sinceEpic: 0, sinceLeg: 0, eventPulls: 0 },
+    history: [],         // recent summons
+    seenNew: [],         // skillIds shown with "New!" already
+    shop: null,          // { restockAt, slots, bought:[] }
+    seededStarter: false,
+  },
   // Admin
   adminUnlocked: false,
   godClap: false,        // admin: 10x boss damage
@@ -54,15 +68,48 @@ const DEFAULT_PROFILE = {
     reducedMotion: false,
     muteAll: false,
   },
+  _v: SCHEMA_VERSION,
 };
+
+// One-time seed of the starter Goon loadout + coins for a first 10x pull.
+function seedGoons(p) {
+  if (p.goons.seededStarter) return;
+  const known = new Set(SKILLS.map((s) => s.id));
+  for (const id of STARTER_OWNED) if (known.has(id)) p.goons.owned[id] = Math.max(1, p.goons.owned[id] || 0);
+  for (const slot in STARTER_LOADOUT) {
+    const id = STARTER_LOADOUT[slot];
+    if (!p.goons.loadout[slot] && known.has(id)) p.goons.loadout[slot] = id;
+  }
+  p.goons.clapCoins = Math.max(p.goons.clapCoins || 0, 1500); // enough for a 10x
+  p.goons.seededStarter = true;
+}
+
+// Safe forward migrations — never wipe data, only fill/upgrade.
+function migrate(p) {
+  if (!p.goons || typeof p.goons !== "object") p.goons = structuredClone(DEFAULT_PROFILE.goons);
+  else {
+    const g = DEFAULT_PROFILE.goons;
+    p.goons = {
+      ...structuredClone(g), ...p.goons,
+      owned: (p.goons.owned && typeof p.goons.owned === "object") ? p.goons.owned : {},
+      loadout: { ...g.loadout, ...(p.goons.loadout || {}) },
+      gacha: { ...g.gacha, ...(p.goons.gacha || {}) },
+      history: Array.isArray(p.goons.history) ? p.goons.history : [],
+      seenNew: Array.isArray(p.goons.seenNew) ? p.goons.seenNew : [],
+    };
+  }
+  seedGoons(p);
+  p._v = SCHEMA_VERSION;
+  return p;
+}
 
 export function loadProfile() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return structuredClone(DEFAULT_PROFILE);
+    if (!raw) return migrate(structuredClone(DEFAULT_PROFILE));
     const p = JSON.parse(raw);
-    // shallow-merge to survive schema additions
-    return {
+    // shallow-merge to survive schema additions, then run versioned migration
+    const merged = {
       ...structuredClone(DEFAULT_PROFILE),
       ...p,
       stats: { ...DEFAULT_PROFILE.stats, ...(p.stats || {}) },
@@ -73,8 +120,9 @@ export function loadProfile() {
       titles: Array.isArray(p.titles) ? p.titles : [],
       bests: p.bests && typeof p.bests === "object" ? p.bests : {},
     };
+    return migrate(merged);
   } catch {
-    return structuredClone(DEFAULT_PROFILE);
+    return migrate(structuredClone(DEFAULT_PROFILE));
   }
 }
 

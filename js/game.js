@@ -19,7 +19,7 @@ const COMBO_DECAY_MS = 700;   // no clap for this long => combo cools down
 export const MAX_MULT = 2;    // hard cap — earn every point
 export const MULT_STEP = 0.05; // slow ramp: 20-clap combo to reach x2
 const MAX_LEGIT_CPS = 16;     // anti-autoclicker: humans top out around here
-const SKILL_SCORE_CAP = 0.15; // Goon Skills add at most +15% (mirror of goons.js)
+const GOON_CAP = 0.15; // Goon Skills add at most +15% (mirror of goons.js)
 
 export function comboToMult(combo) {
   return Math.min(MAX_MULT, 1 + combo * MULT_STEP);
@@ -374,7 +374,7 @@ export class Match extends EventTarget {
       }
       // Cap total goon contribution so a build can't exceed the limit.
       const base = Math.max(1, this.score - this.goonBonus);
-      const maxGoon = base * SKILL_SCORE_CAP;
+      const maxGoon = base * GOON_CAP;
       if (this.goonBonus > maxGoon) {
         const cut = Math.round(this.goonBonus - maxGoon);
         this.score -= cut;

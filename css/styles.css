@@ -107,6 +107,17 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   position: relative;
+  -webkit-tap-highlight-color: transparent;  /* no blue flash on tap */
+  overscroll-behavior-y: contain;             /* no pull-to-refresh mid-clap */
+}
+
+/* Touch game feel: no double-tap zoom, no text selection on game surfaces */
+button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
+.clap-stage, .arena, .clash-bar, .brand, .hud-level, .hud-rank, .hud-gear {
+  touch-action: manipulation;
+}
+.clap-stage, .arena, .clash-bar, .clash-fill, .countdown, .ko-flash {
+  user-select: none; -webkit-user-select: none;
 }
 
 .display { font-family: "Chakra Petch", var(--font); letter-spacing: 0.5px; }

@@ -6,7 +6,9 @@ import { ACHIEVEMENTS, isUnlocked } from "./achievements.js";
 import { comboToMult } from "./game.js";
 import { EFFECTS, effectById, RARITY_COLOR } from "./fx.js";
 import { BOSSES } from "./rpg.js";
-import { gradeFor } from "./grade.js";
+import { gradeFor, GRADES } from "./grade.js";
+import { TITLES, titleById, unlockedTitles, titleChip } from "./titles.js";
+import { ensureQuests, questDef } from "./quests.js";
 import {
   dailyInfo, playtimeInfo, boostActive, boostRemainMin,
   BOOST_COST_GEMS, PREMIUM_COST_GEMS,
@@ -151,6 +153,7 @@ export function renderLobby(profile) {
     <div class="hero">
       <span class="kicker">🎧 Lobby online · music ready</span>
       <h1><span class="hero-av">${profile.settings?.avatar || "🫵"}</span> Welcome back, <span class="g">${escapeHtml(profile.name || "Player")}</span></h1>
+      ${profile.equippedTitle ? `<div class="hero-title">${titleChip(titleById(profile.equippedTitle), true)}</div>` : ""}
       <p class="lead">The AI clap-speed arena. Turn on your mic, clap as fast as your hands can go, and let the neural onset detector turn raw applause into raw score. Climb from Iron to Radiant.</p>
       <div class="hero-cta">
         <button class="btn big" data-play="ranked">🏆 Play Ranked</button>
@@ -227,6 +230,8 @@ export function renderLobby(profile) {
 
     ${renderRewardRow(profile)}
 
+    ${renderQuests(profile)}
+
     <div class="stat-strip">
       <div class="stat-box"><div class="v">${s.bestScore.toLocaleString()}</div><div class="l">Best Score</div></div>
       <div class="stat-box"><div class="v">${s.bestCps}</div><div class="l">Top CPS</div></div>
@@ -236,7 +241,34 @@ export function renderLobby(profile) {
     </div>
 
     ${renderHistory(profile)}
+
+    <div class="center" style="margin-top:30px">
+      <button class="btn ghost secret-keyhole" id="secret-keyhole" title="Something's here…">🔑</button>
+    </div>
   </section>`;
+}
+
+function renderQuests(profile) {
+  const q = ensureQuests(profile);
+  const cards = q.items.map((item) => {
+    const def = questDef(item.id);
+    if (!def) return "";
+    const done = item.prog >= def.target;
+    return `
+      <div class="quest-card ${done && !item.claimed ? "ready" : ""} ${item.claimed ? "claimed" : ""}">
+        <div class="quest-body">
+          <div class="quest-desc">${def.desc}</div>
+          <div class="quest-bar"><i style="width:${Math.round((item.prog / def.target) * 100)}%"></i></div>
+          <div class="quest-prog">${Math.min(item.prog, def.target)}/${def.target}</div>
+        </div>
+        <div class="quest-reward">
+          ${item.claimed ? `<span class="quest-done">✓</span>` : `<button class="btn ${done ? "" : "ghost"}" data-claim-quest="${item.id}" ${done ? "" : "disabled"}>${jcBadge(15)} ${def.reward}</button>`}
+        </div>
+      </div>`;
+  }).join("");
+  return `
+    <div class="section-title" style="margin-top:30px"><h2 style="font-size:22px">Daily Quests</h2><span class="sub">resets every day</span></div>
+    <div class="quest-grid">${cards}</div>`;
 }
 
 function renderRewardRow(profile) {
@@ -412,6 +444,15 @@ export function renderSettings(profile) {
       </div>
 
       <div class="field">
+        <label>Title <span class="sub" style="font-size:11px">shown under your name</span></label>
+        <div class="title-row" id="title-row">
+          <button class="title-pick ${!profile.equippedTitle ? "active" : ""}" data-title="">None</button>
+          ${unlockedTitles(profile, levelProgress(profile.xp).level).map((t) =>
+            `<button class="title-pick ${profile.equippedTitle === t.id ? "active" : ""}" data-title="${t.id}">${titleChip(t)}</button>`).join("")}
+        </div>
+      </div>
+
+      <div class="field">
         <label>Theme</label>
         <div class="theme-row" id="theme-row">
           ${THEMES.map((t) => `
@@ -425,10 +466,13 @@ export function renderSettings(profile) {
       <div class="field">
         <label>Mic sensitivity · <span class="val-read" id="set-sens-read">${Math.round(st.sensitivity * 100)}%</span></label>
         <input type="range" id="set-sens" min="0" max="1" step="0.01" value="${st.sensitivity}" />
+        <div class="row" style="margin-top:10px"><button class="btn ghost" id="recalibrate" style="font-size:13px">🎚️ Recalibrate mic</button></div>
       </div>
       ${toggle("set-music", st.musicOn, "Lobby music", "Procedural synth-wave loop")}
       ${toggle("set-sfx", st.sfxOn, "Sound effects", "Claps, countdown, knockout & win cues")}
+      ${toggle("set-mute", st.muteAll, "Mute everything", "Silence all music and sound")}
       ${toggle("set-cam", st.camOn, "Webcam window", "Show your live camera while playing")}
+      ${toggle("set-motion", st.reducedMotion, "Reduced motion", "Fewer particles & screen effects (accessibility)")}
 
       <div class="danger-zone">
         <div class="set-label" style="color:var(--bad)">Danger zone</div>
@@ -627,18 +671,39 @@ export function renderResults(result, report, snapshot = null, jcReport = null) 
       <div class="grade-label">${g.label}</div>
     </div>`;
 
+  // "You were 0.4 CPS from A" near-miss line
+  const nextGrade = [...GRADES].reverse().find((x) => x.min > g.pct);
+  let nearMiss = "";
+  if (nextGrade) {
+    const needPct = nextGrade.min - g.pct;
+    const cpsGap = (needPct / 100 * 12 / 0.4).toFixed(1); // rough CPS equivalent
+    nearMiss = `<div class="near-miss">You were <b style="color:${nextGrade.color}">${cpsGap} CPS</b> from grade <b style="color:${nextGrade.color}">${nextGrade.key}</b></div>`;
+  }
+
+  // score breakdown (perfect / burst bonuses)
+  const bd = result.breakdown;
+  const breakdown = (bd && (bd.perfect || bd.burst) && !result.hasOpponent)
+    ? `<div class="score-bd">
+         <span>Base ${(bd.base - bd.perfect).toLocaleString()}</span>
+         ${bd.burst ? `<span class="bd-burst">Burst +${bd.burst.toLocaleString()}</span>` : ""}
+         ${bd.perfect ? `<span class="bd-perfect">Perfect ×${result.perfects} +${bd.perfect}</span>` : ""}
+       </div>`
+    : "";
+
   return `
   <section class="screen results">
     <div class="res-card">
       ${gradeBadge}
       <div class="res-verdict ${verdictClass}">${verdict}</div>
       ${hero}
+      ${nearMiss}
+      ${breakdown}
       ${snap}
 
       <div class="res-grid" style="margin-top:22px">
         <div class="rb"><div class="v">${result.totalClaps}</div><div class="l">Claps</div></div>
         <div class="rb"><div class="v">${result.peakCps}</div><div class="l">Peak CPS</div></div>
-        <div class="rb"><div class="v">x${comboToMult(result.peakCombo).toFixed(1)}</div><div class="l">Best Combo</div></div>
+        <div class="rb"><div class="v">${result.perfects || 0}</div><div class="l">Perfects</div></div>
       </div>
 
       <div class="reward-row">
@@ -903,13 +968,27 @@ export function renderVersus(profile) {
   </section>`;
 }
 
-// ---- Admin panel -----------------------------------------------------------
+// ---- Admin panel (window) --------------------------------------------------
 export function renderAdmin(profile) {
   const btn = (id, icon, label, sub = "") =>
     `<button class="admin-btn" id="${id}"><span class="ab-ic">${icon}</span><span class="ab-label">${label}</span>${sub ? `<span class="ab-sub">${sub}</span>` : ""}</button>`;
   return `
   <section class="screen">
-    <div class="section-title"><h2>🛠️ Admin Panel</h2><span class="sub">developer access — with great power…</span></div>
+   <div class="admin-window">
+    <div class="admin-titlebar">
+      <div class="aw-dots"><i></i><i></i><i></i></div>
+      <div class="aw-title">🛠️ JERKMANIA · DEV CONSOLE</div>
+      <div class="aw-user">${escapeHtml(profile.name)} · ADMIN</div>
+    </div>
+   <div class="admin-body">
+
+    <div class="admin-sec">🏷️ Grant Titles <span class="admin-hint">only you can hand these out</span></div>
+    <div class="admin-grid">
+      ${btn("adm-title-tester", "🧪", "Grant TESTER", "give to a tester")}
+      ${btn("adm-title-dev", "👨‍💻", "Grant DEVELOPER", "dev crew")}
+      ${btn("adm-title-jowy", "🟢", "Grant JOWY", "the stinky one")}
+      ${btn("adm-title-revoke", "🚫", "Revoke Special Titles")}
+    </div>
 
     <div class="admin-sec">💰 Currency</div>
     <div class="admin-grid">
@@ -931,13 +1010,13 @@ export function renderAdmin(profile) {
       ${btn("adm-bosses", "🗺️", "Unlock All Bosses")}
     </div>
 
-    <div class="admin-sec">✨ Cosmetics</div>
+    <div class="admin-sec">✨ Cosmetics & Effects</div>
     <div class="admin-grid">
       ${btn("adm-auras", "🎨", "Unlock All Effects")}
-      ${btn("adm-dev", "👨‍💻", "Equip Developer Aura", "matrix glyphs")}
-      ${btn("adm-susanoo", "👹", "Equip Spectral Guardian", "giant spirit warrior")}
-      ${btn("adm-guardian", "⚔️", "Test Guardian Flash")}
-      ${btn("adm-burst", "💥", "Test Aura Burst")}
+      ${btn("adm-dev", "👨‍💻", "Equip Developer Effect", "matrix glyphs")}
+      ${btn("adm-susanoo", "👹", "Equip Spectral Guardian", "susanoo swing")}
+      ${btn("adm-guardian", "⚔️", "Test SUSANOO Animation")}
+      ${btn("adm-burst", "💥", "Test Equipped Effect")}
       ${btn("adm-premium", "★", profile.premium ? "Revoke Premium" : "Grant Premium")}
     </div>
 
@@ -946,8 +1025,8 @@ export function renderAdmin(profile) {
       ${btn("adm-god", "🙏", profile.godClap ? "God Clap: ON" : "God Clap: OFF", "10× boss damage")}
       ${btn("adm-daily", "📅", "Reset Daily Reward")}
       ${btn("adm-playtime", "⏱️", "+10 min Playtime")}
+      ${btn("adm-quests", "📋", "Complete All Quests")}
       ${btn("adm-history", "🧹", "Clear Match History")}
-      ${btn("adm-hype", "🔥", "Test Hype Callout")}
       ${btn("adm-reset", "💣", "FULL RESET", "wipe everything")}
     </div>
 
@@ -955,13 +1034,41 @@ export function renderAdmin(profile) {
       <button class="btn ghost" id="adm-lock">🔒 Lock admin panel</button>
       <button class="btn ghost" data-nav="lobby">← Back to lobby</button>
     </div>
+   </div>
+   </div>
   </section>`;
 }
 
+// ---- Onboarding tutorial ---------------------------------------------------
+export const TUTORIAL_STEPS = [
+  { emoji: "👏", title: "Welcome to JERKMANIA", body: "The AI clap-speed arena. This 30-second intro covers everything you need. Tap Next." },
+  { emoji: "🎙️", title: "Two ways to play", body: "<b>Clap Mode</b> uses your microphone — real claps are detected by onset analysis. <b>Keyboard Mode</b> is different: you alternate <b>F</b> and <b>J</b> like two hands (or tap left/right). Mic needs permission — it's on-device only, never recorded." },
+  { emoji: "📈", title: "Combo & CPS", body: "Clap fast and steady to build your <b>combo</b> — it raises your multiplier up to <b>×2</b>. <b>CPS</b> is claps-per-second; the meter turns hot past 6. Every point is earned — no autoclickers." },
+  { emoji: "⚡", title: "Live events", body: "Watch for <b>BURST</b> windows (double points!), <b>SILENCE</b> hazards (claps score nothing — stop!), and <b>PERFECT</b> beat pulses for bonus points. Timing beats mashing." },
+  { emoji: "🏆", title: "Modes & progress", body: "Ranked climbs Iron→Radiant. Duel an AI or a friend (Versus 2P). Explore <b>JerkWorld</b> to clap-battle bosses. Earn <b>Jerk Coins</b> for effects in the Shop, finish <b>daily quests</b>, and grab your reward every day." },
+];
+export function renderTutorial(step) {
+  const s = TUTORIAL_STEPS[step];
+  const dots = TUTORIAL_STEPS.map((_, i) => `<i class="${i === step ? "on" : ""}"></i>`).join("");
+  const last = step === TUTORIAL_STEPS.length - 1;
+  return `
+    <div class="tut-card">
+      <div class="tut-emoji">${s.emoji}</div>
+      <h3>${s.title}</h3>
+      <p>${s.body}</p>
+      <div class="tut-dots">${dots}</div>
+      <div class="row" style="justify-content:center;margin-top:8px">
+        <button class="btn ghost" id="tut-skip">Skip</button>
+        <button class="btn" id="tut-next">${last ? "Let's clap! 👏" : "Next →"}</button>
+      </div>
+    </div>`;
+}
+
 // ---- Particle background ---------------------------------------------------
-export function initParticles() {
+export function initParticles(reduced = false) {
   const canvas = $("#particle-canvas");
   if (!canvas) return () => {};
+  if (reduced || matchMedia("(prefers-reduced-motion: reduce)").matches) { canvas.style.display = "none"; return () => {}; }
   const ctx = canvas.getContext("2d");
   let w, h, parts = [], raf;
   const resize = () => {

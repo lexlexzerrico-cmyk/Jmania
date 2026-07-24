@@ -71,6 +71,31 @@ export class Match extends EventTarget {
     // 50 = dead even, 100 = player knockout, 0 = foe knockout.
     this.tug = 50;
     this.knockout = 0;       // 0 none, 1 player won, -1 foe won
+
+    // ---- live events: burst windows, silence hazards, perfect pulses ----
+    this.activeEvent = null;      // null | "burst" | "silence"
+    this.eventEndsAt = 0;
+    this._schedule = [];          // [{at, type, dur}]
+    this._pulses = [];            // perfect-timing beat times
+    this._nextPulseWarned = false;
+    this.perfects = 0;
+    this.breakdown = { base: 0, burst: 0, perfect: 0, penalty: 0 };
+    // Live events only in solo timed modes (keeps 1v1 clean).
+    if (!this.endless && !this.bot && this.duration >= 15) this._planEvents();
+  }
+
+  _planEvents() {
+    const D = this.duration * 1000;
+    const n = Math.max(2, Math.round(this.duration / 12)); // ~1 event / 12s
+    for (let i = 0; i < n; i++) {
+      const at = D * (0.2 + 0.65 * (i + Math.random() * 0.5) / n);
+      const type = Math.random() < 0.6 ? "burst" : "silence";
+      this._schedule.push({ at, type, dur: type === "burst" ? 5000 : 2500 });
+    }
+    // perfect pulses every ~5s outside the first seconds
+    for (let t = 4000; t < D - 2000; t += 4200 + Math.random() * 1800) {
+      this._pulses.push(t);
+    }
   }
 
   start() {
@@ -101,13 +126,32 @@ export class Match extends EventTarget {
 
     this.mult = comboToMult(this.combo);
 
-    const pts = Math.round(BASE_POINTS * this.mult * (0.65 + strength * 0.35));
+    // Burst window doubles points; silence hazard zeroes them (a "hazard").
+    let eventMult = 1;
+    if (this.activeEvent === "burst") eventMult = 2;
+    else if (this.activeEvent === "silence") eventMult = 0;
+
+    // PERFECT timing: clap within 140ms of a beat pulse for a bonus.
+    let perfect = false;
+    if (this._pulses.length) {
+      const rel = now - this.startAt;
+      for (let i = 0; i < this._pulses.length; i++) {
+        if (Math.abs(this._pulses[i] - rel) < 140) { perfect = true; this._pulses.splice(i, 1); break; }
+      }
+    }
+
+    let pts = Math.round(BASE_POINTS * this.mult * (0.65 + strength * 0.35) * eventMult);
+    if (perfect && eventMult > 0) { pts += 25; this.perfects += 1; this.breakdown.perfect += 25; }
+    if (eventMult === 2) this.breakdown.burst += Math.round(pts / 2);
+    this.breakdown.base += pts;
     this.score += pts;
     this.totalClaps += 1;
     this.peakCombo = Math.max(this.peakCombo, this.combo);
 
     // CPS bookkeeping
     this.clapTimes.push(now);
+
+    if (perfect) this.dispatchEvent(new CustomEvent("perfect", { detail: { pts } }));
 
     // 1v1 clash: shove the lightning bar toward the opponent.
     if (this.bot) {
@@ -155,6 +199,27 @@ export class Match extends EventTarget {
     const cps = this._cps(now);
     this.peakCps = Math.max(this.peakCps, cps);
 
+    // ---- live event scheduling ----
+    const rel = elapsedMs;
+    for (let i = this._schedule.length - 1; i >= 0; i--) {
+      const ev = this._schedule[i];
+      if (rel >= ev.at) {
+        this.activeEvent = ev.type;
+        this.eventEndsAt = now + ev.dur;
+        this._schedule.splice(i, 1);
+        this.dispatchEvent(new CustomEvent("event", { detail: { type: ev.type, dur: ev.dur } }));
+      }
+    }
+    if (this.activeEvent && now >= this.eventEndsAt) {
+      this.activeEvent = null;
+      this.dispatchEvent(new CustomEvent("event", { detail: { type: "clear" } }));
+    }
+    // perfect-pulse pre-warning (200ms lead) so the player can time it
+    if (this._pulses.length) {
+      const next = this._pulses[0];
+      this.dispatchEvent(new CustomEvent("beat", { detail: { lead: next - rel } }));
+    }
+
     this.dispatchEvent(new CustomEvent("tick", {
       detail: {
         remain,
@@ -164,6 +229,7 @@ export class Match extends EventTarget {
         cps,
         combo: this.combo,
         mult: this.mult,
+        event: this.activeEvent,
         botScore: this.botScore,
         botClaps: this.botClaps,
         botCps: this.bot ? this._botCps(now) : 0,
@@ -239,6 +305,8 @@ export class Match extends EventTarget {
       knockout: !!this.knockout,
       youBar: Math.round(this.tug),
       foeBar: Math.round(100 - this.tug),
+      perfects: this.perfects,
+      breakdown: this.breakdown,
     };
     this.dispatchEvent(new CustomEvent("end", { detail: result }));
   }

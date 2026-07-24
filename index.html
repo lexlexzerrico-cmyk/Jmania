@@ -23,7 +23,23 @@
   <!-- Top navigation / HUD -->
   <header class="topbar" id="topbar">
     <div class="brand" data-nav="lobby">
-      <span class="brand-mark">👏</span>
+      <span class="brand-mark">
+        <svg viewBox="0 0 44 44" width="30" height="30" aria-hidden="true">
+          <defs>
+            <linearGradient id="bmg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#ff3d7f"/><stop offset="0.5" stop-color="#b14dff"/><stop offset="1" stop-color="#22e0d6"/>
+            </linearGradient>
+          </defs>
+          <circle cx="22" cy="22" r="21" fill="url(#bmg)" opacity="0.18"/>
+          <circle cx="22" cy="22" r="21" fill="none" stroke="url(#bmg)" stroke-width="2"/>
+          <!-- left hand -->
+          <path d="M17 30 L8 24 Q6 22 8 20 L15 24 L10 15 Q9 12 12 12 L18 22 Z" fill="url(#bmg)"/>
+          <!-- right hand -->
+          <path d="M27 30 L36 24 Q38 22 36 20 L29 24 L34 15 Q35 12 32 12 L26 22 Z" fill="url(#bmg)"/>
+          <!-- lightning spark between -->
+          <path d="M23 11 L19 22 L23 22 L20 33 L27 20 L23 20 Z" fill="#fff8c4" stroke="#ffd05a" stroke-width="0.6"/>
+        </svg>
+      </span>
       <span class="brand-name">JERK<span class="accent">MANIA</span></span>
     </div>
 

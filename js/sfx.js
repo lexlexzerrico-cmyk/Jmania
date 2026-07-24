@@ -177,9 +177,37 @@ export class Sfx {
       case "sparkle":
         this._tone(1200 + Math.random() * 800, t, 0.1, { type: "triangle", gain: 0.14 });
         break;
+      case "suck": // black hole — rising suction then deep collapse
+        this._tone(2000, t, 0.3, { type: "sine", gain: 0.12, glideTo: 120 });
+        this._tone(60, t, 0.45, { type: "sine", gain: 0.24, glideTo: 28, delay: 0.18 });
+        break;
+      case "shimmer": // galaxy — airy ascending sparkle chord
+        [880, 1108, 1318, 1760].forEach((f, i) =>
+          this._tone(f, t, 0.3, { type: "sine", gain: 0.08, delay: i * 0.06 }));
+        break;
+      case "roar": // chakra — low growl + fire
+        this._tone(70, t, 0.35, { type: "sawtooth", gain: 0.2, glideTo: 110 });
+        this._noise(t, 0.25, { gain: 0.14, hp: 500 });
+        break;
+      case "hslash": // bankai — heavy dark slash
+        this._noise(t, 0.14, { gain: 0.22, hp: 900 });
+        this._tone(400, t, 0.22, { type: "sawtooth", gain: 0.18, glideTo: 60 });
+        break;
+      case "gong": // domain expansion — deep resonant gong
+        this._tone(196, t, 0.9, { type: "sine", gain: 0.22 });
+        this._tone(392, t, 0.7, { type: "sine", gain: 0.1, delay: 0.02 });
+        this._tone(98, t, 1.0, { type: "triangle", gain: 0.12, delay: 0.05 });
+        break;
       default:
         this.clap(combo);
     }
+  }
+
+  perfect() { // golden timing hit
+    const ctx = this._ensure(); if (!ctx) return;
+    const t = ctx.currentTime;
+    this._tone(1568, t, 0.1, { type: "triangle", gain: 0.2 });
+    this._tone(2093, t, 0.16, { type: "triangle", gain: 0.18, delay: 0.06 });
   }
 
   bossHit() {

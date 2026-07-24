@@ -12,6 +12,9 @@ import { checkAchievements, ACHIEVEMENTS } from "./achievements.js";
 import { FxEngine, EFFECTS, effectById } from "./fx.js";
 import { BOSSES, BossFight } from "./rpg.js";
 import { World8Bit } from "./world8bit.js";
+import { levelFromXp } from "./ranks.js";
+import { TITLES, titleById, unlockedTitles, grantTitle } from "./titles.js";
+import { questProgress, claimQuest, ensureQuests, questDef } from "./quests.js";
 import {
   earnJc, claimDaily, claimPlaytime, dailyInfo, playtimeInfo,
   buyBoost, buyPremium, grantGems, spendJc, boostActive, BOOST_MS,
@@ -20,10 +23,11 @@ import {
   $, $$, toast, renderHud, renderLobby, renderRanks, renderCustomSetup,
   renderMicPanel, renderArena, renderResults, renderAchievements, renderSettings,
   renderShop, renderWorld, renderBossFight, renderBossResults, renderAdmin, renderVersus,
-  initParticles,
+  renderTutorial, initParticles,
 } from "./ui.js";
 
 const ADMIN_CODE = "JERKGOD";
+const SECRET_JOWY = "JOWYJERKMASTER";
 
 const app = $("#app");
 
@@ -358,15 +362,48 @@ function wireSettings() {
 
   $("#set-sfx").addEventListener("click", (e) => {
     const on = !st.sfxOn;
-    st.sfxOn = on; state.sfx.setEnabled(on); saveProfile(state.profile);
+    st.sfxOn = on; saveProfile(state.profile);
     e.currentTarget.classList.toggle("on", on);
+    applyAccessibility();
     if (on) state.sfx.click();
+  });
+
+  $("#set-mute").addEventListener("click", (e) => {
+    const on = !st.muteAll;
+    st.muteAll = on; saveProfile(state.profile);
+    e.currentTarget.classList.toggle("on", on);
+    if (on) { state.music.stop(); musicBtn.classList.remove("playing"); }
+    else if (st.musicOn) { state.music.start().then(() => musicBtn.classList.add("playing")).catch(() => {}); }
+    applyAccessibility();
+  });
+
+  $("#set-motion").addEventListener("click", (e) => {
+    const on = !st.reducedMotion;
+    st.reducedMotion = on; saveProfile(state.profile);
+    e.currentTarget.classList.toggle("on", on);
+    applyAccessibility();
+    if (!on) state.sfx.click();
   });
 
   $("#set-cam").addEventListener("click", (e) => {
     setCam(!state.camera.on);
     // reflect after the async toggle settles
     setTimeout(() => e.currentTarget.classList.toggle("on", state.camera.on), 200);
+  });
+
+  $("#title-row").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-title]"); if (!b) return;
+    state.profile.equippedTitle = b.dataset.title || null;
+    saveProfile(state.profile);
+    $$("#title-row .title-pick").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active"); state.sfx.click();
+  });
+
+  const recal = $("#recalibrate");
+  if (recal) recal.addEventListener("click", () => {
+    state.profile.micCalibrated = false; saveProfile(state.profile);
+    toast("Mic will recalibrate on your next Clap Mode game", "🎚️");
+    state.sfx.click();
   });
 
   $("#reset-btn").addEventListener("click", () => {
@@ -418,6 +455,20 @@ function wireLobby() {
       navTo("lobby");
     }
   });
+  // Daily quest claims (delegated)
+  app.addEventListener("click", function questClick(e) {
+    const q = e.target.closest("[data-claim-quest]");
+    if (!q || q.disabled) return;
+    const got = claimQuest(state.profile, q.dataset.claimQuest);
+    if (got) {
+      toast(`Quest complete — +${got} JC`, "📋");
+      state.sfx.jcGain(); state.fx.coinRain(20);
+      app.removeEventListener("click", questClick);
+      navTo("lobby");
+    }
+  });
+  const key = $("#secret-keyhole");
+  if (key) key.addEventListener("click", () => { state.sfx.click(); secretModal(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -625,6 +676,7 @@ function finishBossFight(r, bossIndex) {
   let jcReport = null;
   let xpGained = 0;
   let isNewKill = false;
+  const prevLevel = levelFromXp(state.profile.xp);
 
   if (r.won) {
     state.sfx.bossDown();
@@ -642,6 +694,12 @@ function finishBossFight(r, bossIndex) {
     state.sfx.lose();
     jcReport = earnJc(state.profile, { score: 0, totalClaps: r.totalClaps, won: false }, 0);
   }
+  // Feed quests (boss kills, claps, cps) and title unlocks.
+  questProgress(state.profile, {
+    totalClaps: r.totalClaps, peakCps: r.peakCps, peakCombo: r.peakCombo,
+    won: r.won, hasOpponent: true, knockout: r.won, bossKill: r.won && isNewKill,
+  });
+  checkTitleUnlocks(prevLevel);
   saveProfile(state.profile);
 
   app.innerHTML = renderBossResults(r, jcReport, xpGained, isNewKill);
@@ -656,6 +714,12 @@ function wireAdmin() {
   const p = state.profile;
   const on = (id, fn) => { const el = $(id); if (el) el.addEventListener("click", () => { fn(); state.sfx.click(); }); };
   const re = () => { saveProfile(p); navTo("admin"); };
+
+  // Title grants (admin-only)
+  on("#adm-title-tester", () => { grantTitle(p, "tester"); p.equippedTitle = "tester"; toast("TESTER title granted & equipped", "🧪"); re(); });
+  on("#adm-title-dev",    () => { grantTitle(p, "developer"); p.equippedTitle = "developer"; toast("DEVELOPER title granted & equipped", "👨‍💻"); re(); });
+  on("#adm-title-jowy",   () => { grantTitle(p, "jowy"); p.equippedTitle = "jowy"; state.fx.burst(innerWidth / 2, innerHeight / 2, effectById("poison"), 1, 12); toast("JOWY title granted", "🟢"); re(); });
+  on("#adm-title-revoke", () => { p.titles = []; if (["tester", "developer", "jowy"].includes(p.equippedTitle)) p.equippedTitle = null; toast("Special titles revoked", "🚫"); re(); });
 
   on("#adm-jc1",   () => { p.jc += 1000; toast("+1,000 JC", "🪙"); re(); });
   on("#adm-jc10",  () => { p.jc += 10000; toast("+10,000 JC", "💰"); re(); });
@@ -674,7 +738,7 @@ function wireAdmin() {
   on("#adm-auras",   () => { p.ownedAuras = EFFECTS.map((a) => a.id); toast("Every effect unlocked", "🎨"); re(); });
   on("#adm-dev",     () => { if (!p.ownedAuras.includes("dev")) p.ownedAuras.push("dev"); p.equippedAura = "dev"; toast("Developer Aura equipped", "👨‍💻"); re(); });
   on("#adm-susanoo", () => { if (!p.ownedAuras.includes("susanoo")) p.ownedAuras.push("susanoo"); p.equippedAura = "susanoo"; state.fx.guardianFlash(); toast("Spectral Guardian equipped", "👹"); re(); });
-  on("#adm-guardian", () => { state.fx.guardianFlash(); state.sfx.aura("boom"); });
+  on("#adm-guardian", () => { state.fx.guardianFlash(); state.sfx.aura("vboom"); });
   on("#adm-burst",   () => { const a = effectById(p.equippedAura); state.fx.burst(innerWidth / 2, innerHeight / 2, a, 1, 20); state.sfx.aura(a.sfx, 20); });
   on("#adm-premium", () => { p.premium = !p.premium; toast(p.premium ? "Premium granted" : "Premium revoked", "★"); re(); });
 
@@ -682,7 +746,7 @@ function wireAdmin() {
   on("#adm-daily",    () => { p.lastDaily = null; toast("Daily reward reset — claim it in the lobby", "📅"); re(); });
   on("#adm-playtime", () => { p.playSeconds = (p.playSeconds || 0) + 600; toast("+10 min playtime credited", "⏱️"); re(); });
   on("#adm-history",  () => { p.history = []; toast("History cleared", "🧹"); re(); });
-  on("#adm-hype",     () => { toast("GODLIKE 👑", "🔥"); state.sfx.unlock(); });
+  on("#adm-quests",   () => { const q = ensureQuests(p); q.items.forEach((it) => { const d = questDef(it.id); if (d) it.prog = d.target; }); toast("All quests ready to claim", "📋"); re(); });
   on("#adm-reset",    () => {
     confirmModal("FULL RESET — wipe rank, level, JC, gems, effects, bosses, everything?", () => {
       state.profile = resetProfile();
@@ -962,6 +1026,22 @@ function wireMatchEvents(match, cfg) {
     }
   });
 
+  // Live events: burst window / silence hazard banners
+  match.addEventListener("event", (e) => {
+    const t = e.detail.type;
+    const stage = $(".clap-stage");
+    if (stage) stage.classList.toggle("ev-burst", t === "burst");
+    if (stage) stage.classList.toggle("ev-silence", t === "silence");
+    if (t === "burst") { showBanner("⚡ BURST — DOUBLE POINTS!", "burst"); state.sfx.go(); }
+    else if (t === "silence") { showBanner("🤫 SILENCE — STOP CLAPPING!", "silence"); state.sfx.lose(); }
+  });
+
+  // Perfect-timing pulse feedback
+  match.addEventListener("perfect", () => {
+    state.sfx.perfect();
+    showHype("PERFECT!");
+  });
+
   match.addEventListener("end", (result) => {
     cleanupInputs();
     const r = result.detail;
@@ -975,6 +1055,15 @@ function wireMatchEvents(match, cfg) {
       finishMatch(r);
     }
   });
+}
+
+function showBanner(text, cls) {
+  const host = $(".arena") || app;
+  const el = document.createElement("div");
+  el.className = `event-banner ${cls}`;
+  el.textContent = text;
+  host.appendChild(el);
+  setTimeout(() => el.remove(), 1600);
 }
 
 function showHype(text) {
@@ -1006,12 +1095,23 @@ function finishMatch(result) {
   // Grab a victory snapshot from the live cam before the stream is touched.
   const snapshot = (state.camera.on && result.won) ? captureSnapshot() : null;
   const prevBestCps = state.profile.stats.bestCps;
+  const prevLevel = levelFromXp(state.profile.xp);
 
   const report = applyMatchResult(state.profile, result);
 
   // Jerk Coins for completing the game (boost/premium multipliers apply).
   const jcReport = earnJc(state.profile, result);
   if (result.won) { state.sfx.jcGain(); state.fx.coinRain(Math.min(40, 10 + Math.round(jcReport.total / 20))); }
+
+  // Daily quest progress + title auto-unlocks + per-mode best.
+  questProgress(state.profile, result);
+  checkTitleUnlocks(prevLevel);
+  const bests = state.profile.bests;
+  let newBest = false;
+  if (!result.hasOpponent && !result.practice) {
+    if ((bests[result.mode] || 0) < result.score) { bests[result.mode] = result.score; newBest = true; }
+  }
+  saveProfile(state.profile);
 
   // Evaluate achievement unlocks against the freshly-updated profile.
   const fresh = checkAchievements(state.profile, {
@@ -1152,12 +1252,98 @@ setInterval(() => {
 }, 5000);
 
 // ---------------------------------------------------------------------------
+// Accessibility application
+// ---------------------------------------------------------------------------
+function applyAccessibility() {
+  const st = state.profile.settings;
+  state.fx.userReduced = !!st.reducedMotion;
+  // muteAll silences sfx entirely; otherwise honor sfxOn
+  state.sfx.setEnabled(!st.muteAll && st.sfxOn);
+}
+applyAccessibility();
+
+// ---------------------------------------------------------------------------
+// Secret code entry (lobby keyhole)
+// ---------------------------------------------------------------------------
+function secretModal() {
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.innerHTML = `
+    <div class="modal">
+      <h3>🔑 Secret Terminal</h3>
+      <div class="modal-note">You found the hidden terminal. Enter a code…</div>
+      <input type="text" class="text-input" id="sc-input" placeholder="enter code" autocomplete="off" />
+      <div class="row" style="justify-content:flex-end;margin-top:16px">
+        <button class="btn ghost" data-no>Close</button>
+        <button class="btn" id="sc-ok">Enter</button>
+      </div>
+    </div>`;
+  document.body.appendChild(back);
+  const input = back.querySelector("#sc-input");
+  input.focus();
+  const submit = () => {
+    const code = (input.value || "").trim().toUpperCase();
+    back.remove();
+    if (code === SECRET_JOWY) {
+      grantTitle(state.profile, "jowy");
+      state.profile.equippedTitle = "jowy";
+      saveProfile(state.profile);
+      state.sfx.win();
+      state.fx.burst(innerWidth / 2, innerHeight / 2, effectById("poison"), 1, 12);
+      toast("🟢 JOWY title unlocked — you stink (affectionately)", "🪰");
+      navTo("lobby");
+    } else if (code) {
+      toast("Nothing happens…", "🔒");
+    }
+  };
+  back.querySelector("#sc-ok").addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  back.addEventListener("click", (e) => { if (e.target === back || e.target.closest("[data-no]")) back.remove(); });
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding tutorial
+// ---------------------------------------------------------------------------
+function showTutorial() {
+  let step = 0;
+  const back = document.createElement("div");
+  back.className = "modal-back tut-back";
+  document.body.appendChild(back);
+  const render = () => {
+    back.innerHTML = renderTutorial(step);
+    back.querySelector("#tut-next").addEventListener("click", () => {
+      state.sfx.click();
+      if (step >= 4) { finish(); } else { step++; render(); }
+    });
+    back.querySelector("#tut-skip").addEventListener("click", finish);
+  };
+  const finish = () => {
+    back.remove();
+    state.profile.tutorialSeen = true;
+    saveProfile(state.profile);
+  };
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// Title auto-unlock notifications
+// ---------------------------------------------------------------------------
+function checkTitleUnlocks(prevLevel) {
+  const level = levelFromXp(state.profile.xp);
+  const before = new Set(unlockedTitles(state.profile, prevLevel).map((t) => t.id));
+  const now = unlockedTitles(state.profile, level);
+  now.forEach((t) => { if (!before.has(t.id)) toast(`New title unlocked — ${t.name}`, "🏷️"); });
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-initParticles();
+initParticles(state.profile.settings.reducedMotion);
+ensureQuests(state.profile);
 navTo("lobby");
 refreshHud();
-if (state.profile.settings.musicOn) musicBtn.classList.add("playing");
+if (state.profile.settings.musicOn && !state.profile.settings.muteAll) musicBtn.classList.add("playing");
+if (!state.profile.tutorialSeen) setTimeout(showTutorial, 500);
 
 // Expose for debugging
 window.JERKMANIA = state;

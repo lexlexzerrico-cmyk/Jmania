@@ -33,6 +33,14 @@ const DEFAULT_PROFILE = {
   equippedAura: "none",
   // RPG
   rpgBeaten: 0,          // how many bosses defeated (index of next unlocked)
+  // Titles / quests / progression
+  titles: [],            // granted secret/admin title ids
+  equippedTitle: null,
+  quests: null,          // { date, items:[{id,prog,claimed}] }
+  bests: {},             // per-mode best score { classic: 1234, ... }
+  tutorialSeen: false,
+  micCalibrated: false,
+  noiseFloor: 0,         // saved calibration baseline
   // Admin
   adminUnlocked: false,
   godClap: false,        // admin: 10x boss damage
@@ -43,6 +51,8 @@ const DEFAULT_PROFILE = {
     camOn: false,       // webcam feed (off by default for privacy)
     theme: "violet",
     avatar: "🫵",
+    reducedMotion: false,
+    muteAll: false,
   },
 };
 
@@ -60,6 +70,8 @@ export function loadProfile() {
       achievements: Array.isArray(p.achievements) ? p.achievements : [],
       history: Array.isArray(p.history) ? p.history : [],
       ownedAuras: Array.isArray(p.ownedAuras) && p.ownedAuras.length ? p.ownedAuras : ["none"],
+      titles: Array.isArray(p.titles) ? p.titles : [],
+      bests: p.bests && typeof p.bests === "object" ? p.bests : {},
     };
   } catch {
     return structuredClone(DEFAULT_PROFILE);

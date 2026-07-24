@@ -166,7 +166,7 @@ button, .mode-card, .chip, .avatar-chip, .theme-chip, .switch,
 
 .brand { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; transition: transform 0.2s var(--ease); }
 .brand:hover { transform: translateY(-1px); }
-.brand-mark { font-size: 26px; filter: drop-shadow(0 0 10px rgba(177,77,255,0.6)); animation: clapWiggle 3.5s ease-in-out infinite; }
+.brand-mark { display: inline-flex; line-height: 0; filter: drop-shadow(0 0 10px rgba(177,77,255,0.6)); animation: clapWiggle 3.5s ease-in-out infinite; }
 @keyframes clapWiggle { 0%,92%,100%{transform:rotate(0)} 94%{transform:rotate(-16deg)} 96%{transform:rotate(14deg)} 98%{transform:rotate(-8deg)} }
 .brand-name { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: 1px; }
 .brand-name .accent { background: var(--grad-hot); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -733,6 +733,99 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .admin-btn .ab-ic { font-size: 22px; }
 .admin-btn .ab-label { font-weight: 600; font-size: 13.5px; }
 .admin-btn .ab-sub { font-size: 11px; color: var(--text-faint); }
+
+/* ============================================================
+   Titles
+   ============================================================ */
+.hero-title { margin: 6px 0 14px; }
+.title-chip { position: relative; display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-display); font-size: 12px; letter-spacing: 1px; padding: 4px 12px; border-radius: 999px; border: 1px solid; }
+.title-chip.big { font-size: 15px; padding: 6px 16px; }
+.title-chip.t-plain    { color: #c8c0e0; border-color: #6a6088; background: rgba(120,110,160,0.12); }
+.title-chip.t-cyan     { color: #22e0d6; border-color: #22e0d6; background: rgba(34,224,214,0.1); }
+.title-chip.t-blue     { color: #7fb0ff; border-color: #7fb0ff; background: rgba(127,176,255,0.1); }
+.title-chip.t-orange   { color: #ff9f3a; border-color: #ff9f3a; background: rgba(255,159,58,0.1); }
+.title-chip.t-epic     { color: #c9a0ff; border-color: #b14dff; background: rgba(177,77,255,0.14); box-shadow: 0 0 12px rgba(177,77,255,0.3); }
+.title-chip.t-gold     { color: #ffd05a; border-color: #ffd05a; background: rgba(255,208,90,0.12); box-shadow: 0 0 12px rgba(255,208,90,0.3); }
+.title-chip.t-radiant  { color: #fff; border-color: transparent; background: linear-gradient(90deg,#ff3d7f,#ffd05a,#22e0d6,#b14dff); background-size: 300% 100%; animation: radiantShift 4s linear infinite; text-shadow: 0 0 8px rgba(0,0,0,0.4); }
+@keyframes radiantShift { to { background-position: 300% 0; } }
+.title-chip.t-tester   { color: #0b1a10; border-color: transparent; background: linear-gradient(90deg,#3ee08a,#a6ff3a); box-shadow: 0 0 14px rgba(62,224,138,0.5); }
+.title-chip.t-dev      { color: #fff; border-color: transparent; background: linear-gradient(90deg,#ff2d6f,#b14dff,#4d7cff); box-shadow: 0 0 16px rgba(177,77,255,0.6); animation: radiantShift 6s linear infinite; background-size: 200% 100%; }
+/* JOWY — green stinky with animated flies + stink waves */
+.title-chip.t-jowy { color: #143a10; border-color: #4a7a1a; background: linear-gradient(90deg,#6aa62a,#8fce3a,#6aa62a); box-shadow: 0 0 14px rgba(120,180,40,0.5); animation: jowyStink 1.2s ease-in-out infinite; overflow: visible; }
+@keyframes jowyStink { 0%,100% { filter: brightness(1); transform: translateY(0); } 50% { filter: brightness(1.15); transform: translateY(-1px); } }
+.title-chip.t-jowy .fly { position: absolute; font-size: 11px; animation: flyBuzz 2.4s ease-in-out infinite; }
+.title-chip.t-jowy .fly.f1 { top: -10px; left: 10%; animation-delay: 0s; }
+.title-chip.t-jowy .fly.f2 { top: -12px; right: 20%; animation-delay: -0.8s; }
+.title-chip.t-jowy .fly.f3 { bottom: -10px; left: 45%; animation-delay: -1.6s; }
+@keyframes flyBuzz { 0% { transform: translate(0,0) rotate(0); } 25% { transform: translate(6px,-4px) rotate(15deg); } 50% { transform: translate(-4px,3px) rotate(-10deg); } 75% { transform: translate(5px,2px) rotate(8deg); } 100% { transform: translate(0,0) rotate(0); } }
+
+.title-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.title-pick { padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); cursor: pointer; color: var(--text); font-family: var(--font); font-size: 13px; transition: all 0.15s; }
+.title-pick:hover { border-color: var(--stroke-strong); }
+.title-pick.active { border-color: var(--accent); box-shadow: var(--glow-accent); }
+
+/* ============================================================
+   Quests
+   ============================================================ */
+.quest-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.quest-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--r-md); background: var(--panel); border: 1px solid var(--stroke); backdrop-filter: blur(8px); }
+.quest-card.ready { border-color: var(--gold); box-shadow: 0 0 20px -8px rgba(255,208,90,0.5); }
+.quest-card.claimed { opacity: 0.5; }
+.quest-body { flex: 1; min-width: 0; }
+.quest-desc { font-weight: 600; font-size: 13.5px; }
+.quest-bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); margin: 7px 0 4px; overflow: hidden; }
+.quest-bar > i { display: block; height: 100%; border-radius: 999px; background: var(--grad-cyan); }
+.quest-prog { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.quest-reward .btn { padding: 8px 12px; font-size: 12px; white-space: nowrap; }
+.quest-done { color: var(--good); font-size: 20px; }
+
+.secret-keyhole { font-size: 18px; padding: 8px 14px; opacity: 0.45; transition: opacity 0.2s, transform 0.2s; }
+.secret-keyhole:hover { opacity: 1; transform: rotate(12deg) scale(1.1); }
+
+/* ============================================================
+   Onboarding tutorial
+   ============================================================ */
+.tut-back { z-index: 95; }
+.tut-card { width: min(460px, calc(100vw - 32px)); padding: 30px; border-radius: var(--r-xl); background: var(--panel-solid); border: 1px solid var(--stroke-strong); box-shadow: var(--shadow); text-align: center; animation: screenIn 0.3s var(--ease); }
+.tut-emoji { font-size: 54px; margin-bottom: 10px; }
+.tut-card h3 { font-family: var(--font-display); font-size: 22px; margin-bottom: 10px; }
+.tut-card p { color: var(--text-dim); font-size: 14.5px; line-height: 1.6; margin-bottom: 18px; }
+.tut-dots { display: flex; gap: 7px; justify-content: center; margin-bottom: 14px; }
+.tut-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: all 0.2s; }
+.tut-dots i.on { background: var(--accent); width: 22px; border-radius: 999px; }
+
+/* ============================================================
+   Admin window
+   ============================================================ */
+.admin-window { max-width: 900px; margin: 0 auto; border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--stroke-strong); box-shadow: var(--shadow); background: var(--panel-solid); }
+.admin-titlebar { display: flex; align-items: center; gap: 14px; padding: 12px 18px; background: linear-gradient(90deg, rgba(177,77,255,0.25), rgba(34,224,214,0.12)); border-bottom: 1px solid var(--stroke-strong); }
+.aw-dots { display: flex; gap: 6px; }
+.aw-dots i { width: 12px; height: 12px; border-radius: 50%; }
+.aw-dots i:nth-child(1) { background: #ff5f57; } .aw-dots i:nth-child(2) { background: #ffbd2e; } .aw-dots i:nth-child(3) { background: #28c940; }
+.aw-title { font-family: var(--font-display); font-size: 14px; letter-spacing: 1px; flex: 1; }
+.aw-user { font-size: 11px; color: var(--text-faint); }
+.admin-body { padding: 20px; max-height: 72vh; overflow-y: auto; }
+.admin-hint { font-size: 11px; color: var(--text-faint); font-weight: 400; margin-left: 6px; }
+
+/* ============================================================
+   Live event banners + arena states
+   ============================================================ */
+.event-banner { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); z-index: 12; font-family: var(--font-display); font-size: clamp(16px, 4vw, 26px); padding: 8px 20px; border-radius: 999px; white-space: nowrap; animation: bannerIn 0.4s var(--ease), bannerOut 0.4s ease 1.2s forwards; }
+.event-banner.burst { color: #0b1a10; background: linear-gradient(90deg,#a6ff3a,#3ee08a); box-shadow: 0 0 30px rgba(62,224,138,0.6); }
+.event-banner.silence { color: #fff; background: linear-gradient(90deg,#ff2d6f,#8f0f22); box-shadow: 0 0 30px rgba(255,45,111,0.6); }
+@keyframes bannerIn { from { transform: translate(-50%,-20px); opacity: 0; } to { transform: translate(-50%,0); opacity: 1; } }
+@keyframes bannerOut { to { transform: translate(-50%,-10px); opacity: 0; } }
+.clap-stage.ev-burst { box-shadow: 0 0 40px rgba(62,224,138,0.4), inset 0 0 30px rgba(62,224,138,0.15); border-color: var(--good); }
+.clap-stage.ev-silence { box-shadow: 0 0 40px rgba(255,45,111,0.35), inset 0 0 30px rgba(255,45,111,0.12); border-color: var(--bad); animation: silenceShake 0.4s ease infinite; }
+@keyframes silenceShake { 0%,100% { transform: translateX(0); } 50% { transform: translateX(2px); } }
+
+/* ============================================================
+   Results extras
+   ============================================================ */
+.near-miss { font-size: 13px; color: var(--text-dim); margin: 10px 0 4px; }
+.score-bd { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; font-size: 12px; color: var(--text-faint); margin: 8px 0; }
+.score-bd .bd-burst { color: var(--good); }
+.score-bd .bd-perfect { color: var(--gold); }
 
 /* ============================================================
    F→S grade badge

@@ -4,6 +4,17 @@
 import { LADDER, rankFromIndex, levelProgress, levelTitle, RR_PER_DIVISION } from "./ranks.js";
 import { ACHIEVEMENTS, isUnlocked } from "./achievements.js";
 
+export const THEMES = [
+  { key: "violet",  name: "Neon Violet", grad: "linear-gradient(135deg,#ff3d7f,#b14dff,#6a5bff)" },
+  { key: "cyber",   name: "Cyber Cyan",  grad: "linear-gradient(135deg,#22e0d6,#4d7cff,#7b5bff)" },
+  { key: "inferno", name: "Inferno",     grad: "linear-gradient(135deg,#ffb03a,#ff5b3a,#ff2d6f)" },
+  { key: "toxic",   name: "Toxic",       grad: "linear-gradient(135deg,#a6ff3a,#3ee08a,#22c8b0)" },
+  { key: "sunset",  name: "Sunset",      grad: "linear-gradient(135deg,#ffcf5a,#ff7a3d,#ff3d9f)" },
+  { key: "ice",     name: "Arctic",      grad: "linear-gradient(135deg,#9fe8ff,#7fb0ff,#b8a8ff)" },
+];
+
+export const AVATARS = ["🫵", "😎", "🔥", "👑", "🤖", "🦾", "⚡", "🐐", "💪", "🎯", "👻", "🦊"];
+
 // Mirror of the match multiplier cap (game.js MAX_MULT) so displayed
 // multipliers never exceed what the game actually awards.
 const MAX_MULT = 6;
@@ -15,6 +26,68 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 export function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ============================================================
+   Valorant-style rank emblem (custom inline SVG)
+   Faceted metallic gem + division chevrons; Radiant gets rays.
+   ============================================================ */
+let _emblemSeq = 0;
+export function rankEmblem(rank, size = 48) {
+  const uid = `re${_emblemSeq++}`;
+  const [hi, mid, lo] = rank.metal || ["#9aa0ab", "#5c626e", "#33373f"];
+
+  // Faceted gem body (angular hexagon)
+  const gem = "M50,5 L87,31 L75,71 L50,90 L25,71 L13,31 Z";
+  const facetTop = "M50,5 L87,31 L50,48 L13,31 Z";       // top-lit face
+  const facetLeft = "M13,31 L50,48 L50,90 L25,71 Z";     // shaded left
+  const facetRight = "M87,31 L75,71 L50,90 L50,48 Z";    // mid right
+
+  // Division chevrons (1–3) or Radiant rays
+  let marks = "";
+  if (rank.isRadiant) {
+    let rays = "";
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const x1 = 50 + Math.cos(a) * 44, y1 = 46 + Math.sin(a) * 44;
+      const x2 = 50 + Math.cos(a) * 56, y2 = 46 + Math.sin(a) * 56;
+      const a2 = a + 0.06, a3 = a - 0.06;
+      const bx = 50 + Math.cos(a2) * 44, by = 46 + Math.sin(a2) * 44;
+      const cx = 50 + Math.cos(a3) * 44, cy = 46 + Math.sin(a3) * 44;
+      rays += `<path d="M${bx.toFixed(1)},${by.toFixed(1)} L${x2.toFixed(1)},${y2.toFixed(1)} L${cx.toFixed(1)},${cy.toFixed(1)} Z" fill="url(#${uid}g)" opacity="0.9"/>`;
+    }
+    marks = rays;
+  } else {
+    const n = rank.division || 1;
+    const xs = n === 3 ? [36, 50, 64] : n === 2 ? [43, 57] : [50];
+    marks = xs.map((cx) =>
+      `<path d="M${cx - 9},101 L${cx},92 L${cx + 9},101 L${cx},97 Z" fill="${hi}" stroke="${lo}" stroke-width="1"/>`
+    ).join("");
+  }
+
+  return `
+  <svg class="rank-svg" viewBox="0 0 100 112" width="${size}" height="${size * 1.12}" aria-hidden="true">
+    <defs>
+      <linearGradient id="${uid}g" x1="0" y1="0" x2="0.4" y2="1">
+        <stop offset="0" stop-color="${hi}"/>
+        <stop offset="0.5" stop-color="${mid}"/>
+        <stop offset="1" stop-color="${lo}"/>
+      </linearGradient>
+      <radialGradient id="${uid}c" cx="0.5" cy="0.4" r="0.6">
+        <stop offset="0" stop-color="#ffffff" stop-opacity="0.85"/>
+        <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    ${rank.isRadiant ? `<circle cx="50" cy="46" r="30" fill="url(#${uid}c)"/>` : ""}
+    ${marks}
+    <path d="${gem}" fill="url(#${uid}g)" stroke="${hi}" stroke-width="1.5" stroke-linejoin="round"/>
+    <path d="${facetTop}" fill="${hi}" opacity="0.45"/>
+    <path d="${facetLeft}" fill="${lo}" opacity="0.35"/>
+    <path d="${facetRight}" fill="${mid}" opacity="0.25"/>
+    <path d="M50,5 L50,90" stroke="${lo}" stroke-width="0.8" opacity="0.4"/>
+    <path d="M13,31 L87,31" stroke="${hi}" stroke-width="0.8" opacity="0.35"/>
+    ${rank.isRadiant ? `<circle cx="50" cy="46" r="6" fill="#fff"/>` : ""}
+  </svg>`;
 }
 
 export function toast(msg, icon = "✨") {
@@ -44,7 +117,7 @@ export function renderHud(profile) {
       </div>
     </div>
     <div class="hud-rank" data-nav="ranks" title="View rank">
-      <span class="rank-emblem">${rank.emblem}</span>
+      <span class="rank-emblem">${rankEmblem(rank, 30)}</span>
       <div class="rank-meta">
         <span class="rank-name">${rank.label}</span>
         <span class="rank-rr">${profile.rr} RR</span>
@@ -62,7 +135,7 @@ export function renderLobby(profile) {
   <section class="screen">
     <div class="hero">
       <span class="kicker">🎧 Lobby online · music ready</span>
-      <h1>Welcome back, <span class="g">${escapeHtml(profile.name || "Player")}</span></h1>
+      <h1><span class="hero-av">${profile.settings?.avatar || "🫵"}</span> Welcome back, <span class="g">${escapeHtml(profile.name || "Player")}</span></h1>
       <p class="lead">The AI clap-speed arena. Turn on your mic, clap as fast as your hands can go, and let the neural onset detector turn raw applause into raw score. Climb from Iron to Radiant.</p>
       <div class="hero-cta">
         <button class="btn big" data-play="ranked">🏆 Play Ranked</button>
@@ -153,7 +226,7 @@ export function renderRanks(profile) {
   const lp = levelProgress(profile.xp);
   const rows = LADDER.map((r, i) => `
     <div class="rank-row ${i === profile.rankIndex ? "current" : ""}">
-      <span class="rr-emblem">${r.emblem}</span>
+      <span class="rr-emblem">${rankEmblem(r, 40)}</span>
       <span class="rr-name">${r.label}</span>
       <span class="rr-band">${i === profile.rankIndex ? `${profile.rr} RR` : (i < profile.rankIndex ? "unlocked" : "locked")}</span>
     </div>`).reverse().join("");
@@ -163,7 +236,7 @@ export function renderRanks(profile) {
     <div class="section-title"><h2>Progression</h2><span class="sub">rank & level</span></div>
 
     <div class="rank-hero" style="--rank-glow:${rank.glow}">
-      <div class="rank-emblem-big">${rank.emblem}</div>
+      <div class="rank-emblem-big">${rankEmblem(rank, 96)}</div>
       <div class="rh-info">
         <div class="rh-tier">${rank.label}</div>
         <div class="rh-rr-track"><i style="width:${profile.rr}%"></i></div>
@@ -258,6 +331,25 @@ export function renderSettings(profile) {
         <label>Display name</label>
         <input type="text" id="name-input" class="text-input" maxlength="18" value="${escapeHtml(profile.name || "Player")}" placeholder="Your name" />
       </div>
+
+      <div class="field">
+        <label>Avatar</label>
+        <div class="avatar-row" id="avatar-row">
+          ${AVATARS.map((a) => `<button class="avatar-chip ${a === (st.avatar || "🫵") ? "active" : ""}" data-avatar="${a}">${a}</button>`).join("")}
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Theme</label>
+        <div class="theme-row" id="theme-row">
+          ${THEMES.map((t) => `
+            <button class="theme-chip ${t.key === (st.theme || "violet") ? "active" : ""}" data-theme-key="${t.key}" title="${t.name}">
+              <span class="theme-swatch" style="background:${t.grad}"></span>
+              <span class="theme-name">${t.name}</span>
+            </button>`).join("")}
+        </div>
+      </div>
+
       <div class="field">
         <label>Mic sensitivity · <span class="val-read" id="set-sens-read">${Math.round(st.sensitivity * 100)}%</span></label>
         <input type="range" id="set-sens" min="0" max="1" step="0.01" value="${st.sensitivity}" />
@@ -334,9 +426,9 @@ export function renderArena(cfg, profile) {
       <div class="clash-arena">
         <div class="clash-heads">
           <div class="clash-head you">
-            <span class="ch-av">🫵</span>
+            <span class="ch-av">${profile.settings?.avatar || "🫵"}</span>
             <div>
-              <div class="ch-name">You</div>
+              <div class="ch-name">${escapeHtml(profile.name || "You")}</div>
               <div class="ch-cps"><b id="you-cps">0</b> cps</div>
             </div>
           </div>
@@ -476,7 +568,7 @@ export function renderResults(result, report, snapshot = null) {
         </div>
         ${result.ranked ? `
         <div class="reward rr">
-          <span class="r-ic">${report.rankAfter.emblem}</span>
+          <span class="r-ic">${rankEmblem(report.rankAfter, 30)}</span>
           <div class="r-body">
             <div class="r-title">${report.rankAfter.label} · ${report.after.rr} RR</div>
             <div class="r-bar"><i id="rr-bar"></i></div>

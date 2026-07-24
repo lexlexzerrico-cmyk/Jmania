@@ -3,16 +3,17 @@
    ============================================================ */
 
 // Tiers ordered low → high. Each tier (except Radiant) has 3 divisions.
+// `metal` = [highlight, mid, shadow] for the gem gradient on the emblem.
 export const TIERS = [
-  { key: "iron",       name: "Iron",       emblem: "⚙️", glow: "rgba(150,150,160,0.5)",  divisions: 3 },
-  { key: "bronze",     name: "Bronze",     emblem: "🥉", glow: "rgba(190,120,70,0.5)",   divisions: 3 },
-  { key: "silver",     name: "Silver",     emblem: "🥈", glow: "rgba(200,205,220,0.5)",  divisions: 3 },
-  { key: "gold",       name: "Gold",       emblem: "🥇", glow: "rgba(255,205,90,0.6)",   divisions: 3 },
-  { key: "platinum",   name: "Platinum",   emblem: "💎", glow: "rgba(90,220,220,0.55)",  divisions: 3 },
-  { key: "diamond",    name: "Diamond",    emblem: "🔷", glow: "rgba(120,150,255,0.6)",  divisions: 3 },
-  { key: "ascendant",  name: "Ascendant",  emblem: "🟢", glow: "rgba(60,220,140,0.6)",   divisions: 3 },
-  { key: "immortal",   name: "Immortal",   emblem: "🔴", glow: "rgba(255,80,110,0.6)",   divisions: 3 },
-  { key: "radiant",    name: "Radiant",    emblem: "🌟", glow: "rgba(255,215,120,0.75)", divisions: 1 },
+  { key: "iron",       name: "Iron",       emblem: "⚙️", glow: "rgba(150,150,160,0.5)",  divisions: 3, metal: ["#9aa0ab", "#5c626e", "#33373f"] },
+  { key: "bronze",     name: "Bronze",     emblem: "🥉", glow: "rgba(190,120,70,0.5)",   divisions: 3, metal: ["#e6a76b", "#b06a34", "#6e3d1c"] },
+  { key: "silver",     name: "Silver",     emblem: "🥈", glow: "rgba(200,205,220,0.5)",  divisions: 3, metal: ["#eef1f6", "#b9c0cc", "#7c8494"] },
+  { key: "gold",       name: "Gold",       emblem: "🥇", glow: "rgba(255,205,90,0.6)",   divisions: 3, metal: ["#ffe79a", "#f5c341", "#b8871a"] },
+  { key: "platinum",   name: "Platinum",   emblem: "💎", glow: "rgba(90,220,220,0.55)",  divisions: 3, metal: ["#a8f0ee", "#4bc6c8", "#227d8a"] },
+  { key: "diamond",    name: "Diamond",    emblem: "🔷", glow: "rgba(120,150,255,0.6)",  divisions: 3, metal: ["#dcc6ff", "#a58bf0", "#e78fd0"] },
+  { key: "ascendant",  name: "Ascendant",  emblem: "🟢", glow: "rgba(60,220,140,0.6)",   divisions: 3, metal: ["#9bffcf", "#31d47f", "#188a4e"] },
+  { key: "immortal",   name: "Immortal",   emblem: "🔴", glow: "rgba(255,80,110,0.6)",   divisions: 3, metal: ["#ff9fb0", "#e34860", "#8f2334"] },
+  { key: "radiant",    name: "Radiant",    emblem: "🌟", glow: "rgba(255,215,120,0.75)", divisions: 1, metal: ["#fff6d8", "#ffe487", "#f7b733"] },
 ];
 
 export const RR_PER_DIVISION = 100;
@@ -29,6 +30,8 @@ export function buildLadder() {
         tierName: tier.name,
         emblem: tier.emblem,
         glow: tier.glow,
+        metal: tier.metal,
+        isRadiant: tier.key === "radiant",
         division: tier.divisions === 1 ? null : d,
         label: tier.divisions === 1 ? tier.name : `${tier.name} ${d}`,
       });

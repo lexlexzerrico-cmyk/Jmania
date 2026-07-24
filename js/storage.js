@@ -25,6 +25,8 @@ const DEFAULT_PROFILE = {
     musicOn: true,
     sfxOn: true,
     camOn: false,       // webcam feed (off by default for privacy)
+    theme: "violet",
+    avatar: "🫵",
   },
 };
 

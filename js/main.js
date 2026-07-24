@@ -30,9 +30,14 @@ const state = {
   keyHandler: null,
 };
 
-// Apply saved sensitivity + sfx preference
+// Apply saved sensitivity + sfx preference + theme
 state.clap.setSensitivity(state.profile.settings.sensitivity);
 state.sfx.setEnabled(state.profile.settings.sfxOn);
+
+function applyTheme(key) {
+  document.documentElement.dataset.theme = key || "violet";
+}
+applyTheme(state.profile.settings.theme);
 
 // ---------------------------------------------------------------------------
 // HUD + navigation
@@ -131,6 +136,21 @@ function wireSettings() {
   $("#name-input").addEventListener("input", (e) => {
     state.profile.name = e.target.value.trim().slice(0, 18) || "Player";
     saveProfile(state.profile);
+  });
+
+  $("#avatar-row").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-avatar]"); if (!c) return;
+    st.avatar = c.dataset.avatar; saveProfile(state.profile);
+    $$("#avatar-row .avatar-chip").forEach((x) => x.classList.remove("active"));
+    c.classList.add("active"); state.sfx.click();
+  });
+
+  $("#theme-row").addEventListener("click", (e) => {
+    const c = e.target.closest("[data-theme-key]"); if (!c) return;
+    st.theme = c.dataset.themeKey; saveProfile(state.profile);
+    applyTheme(st.theme);
+    $$("#theme-row .theme-chip").forEach((x) => x.classList.remove("active"));
+    c.classList.add("active"); state.sfx.click();
   });
 
   const sens = $("#set-sens");
@@ -332,9 +352,20 @@ function wireMatchEvents(match, cfg) {
   const youCps = $("#you-cps");
   const foeCps = $("#foe-cps");
 
+  // Hype callouts at combo milestones
+  const hypeStops = [
+    { c: 12, t: "HEATING UP" }, { c: 22, t: "ON FIRE 🔥" },
+    { c: 34, t: "UNSTOPPABLE" }, { c: 48, t: "GODLIKE 👑" },
+  ];
+  let hypeIdx = 0;
+
   match.addEventListener("clap", (e) => {
     const { score, mult, strength, combo } = e.detail;
     state.sfx.clap(combo);
+    while (hypeIdx < hypeStops.length && combo >= hypeStops[hypeIdx].c) {
+      showHype(hypeStops[hypeIdx].t);
+      hypeIdx++;
+    }
     if (scoreEl) {
       scoreEl.textContent = score.toLocaleString();
       scoreEl.classList.add("bump");
@@ -393,12 +424,25 @@ function wireMatchEvents(match, cfg) {
     const r = result.detail;
     if (r.knockout) {
       state.sfx.knockout();
+      app.classList.add("shake");
+      setTimeout(() => app.classList.remove("shake"), 500);
       koFlash(r.won);
       setTimeout(() => finishMatch(r), 1050);
     } else {
       finishMatch(r);
     }
   });
+}
+
+function showHype(text) {
+  const stage = $(".clap-stage");
+  if (!stage) return;
+  const el = document.createElement("div");
+  el.className = "hype";
+  el.textContent = text;
+  stage.appendChild(el);
+  state.sfx.unlock();
+  setTimeout(() => el.remove(), 900);
 }
 
 function koFlash(won) {
@@ -418,6 +462,7 @@ function cleanupInputs() {
 function finishMatch(result) {
   // Grab a victory snapshot from the live cam before the stream is touched.
   const snapshot = (state.camera.on && result.won) ? captureSnapshot() : null;
+  const prevBestCps = state.profile.stats.bestCps;
 
   const report = applyMatchResult(state.profile, result);
 
@@ -440,6 +485,17 @@ function finishMatch(result) {
   app.innerHTML = renderResults(result, report, snapshot);
   refreshHud();
   window.scrollTo({ top: 0, behavior: "smooth" });
+
+  // Personal-best CPS celebration
+  if (result.peakCps > prevBestCps && result.peakCps >= 3) {
+    const verdictEl = $(".res-verdict");
+    if (verdictEl) {
+      const rib = document.createElement("div");
+      rib.className = "pb-ribbon";
+      rib.textContent = `🏆 New personal best — ${result.peakCps} CPS`;
+      verdictEl.insertAdjacentElement("afterend", rib);
+    }
+  }
 
   // Animate reward bars
   requestAnimationFrame(() => {

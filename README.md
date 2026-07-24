@@ -48,7 +48,13 @@ Any static host works too (GitHub Pages, Netlify, Vercel, `npx serve`, …).
   makes each clap shove the lightning bar harder.
 - **Valorant-style ranks** — Iron · Bronze · Silver · Gold · Platinum · Diamond ·
   Ascendant · Immortal (three divisions each) · **Radiant**, with RR gains/losses
-  and promotions/demotions.
+  and promotions/demotions. Each rank has a custom faceted **metallic gem emblem**
+  (inline SVG) with division chevrons, and Radiant gets rays + a glowing core.
+- **Themes** — six full color themes (Neon Violet, Cyber Cyan, Inferno, Toxic,
+  Sunset, Arctic) recolor accents, gradients and the animated background live.
+- **Avatars** — pick from 12 emoji avatars shown in the lobby and your 1v1 side.
+- **Hype & feedback** — combo-milestone callouts (HEATING UP → GODLIKE), a
+  screen shake on knockout, and a "new personal best" ribbon on the results.
 - **Levels & XP** — an escalating XP curve with playful level titles
   (Rookie Clapper → Clap Deity), persisted in `localStorage`.
 - **Achievements** — 15 unlockable badges for speed, knockouts, ranks, levels

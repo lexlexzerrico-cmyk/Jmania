@@ -55,6 +55,8 @@ const DEFAULT_PROFILE = {
     shop: null,          // { restockAt, slots, bought:[] }
     seededStarter: false,
   },
+  // Custom effect art the player uploads themselves (effectId -> dataURL)
+  customArt: {},
   // Admin
   adminUnlocked: false,
   godClap: false,        // admin: 10x boss damage
@@ -98,6 +100,7 @@ function migrate(p) {
       seenNew: Array.isArray(p.goons.seenNew) ? p.goons.seenNew : [],
     };
   }
+  if (!p.customArt || typeof p.customArt !== "object") p.customArt = {};
   seedGoons(p);
   p._v = SCHEMA_VERSION;
   return p;

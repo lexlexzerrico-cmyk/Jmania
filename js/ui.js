@@ -430,6 +430,41 @@ export function renderAchievements(profile) {
   </section>`;
 }
 
+// Effects that support a custom user-uploaded image/GIF, with friendly names.
+export const ART_SLOTS = [
+  { id: "susanoo", name: "Spectral Guardian (Susanoo)" },
+  { id: "chakra",  name: "Nine-Tailed Cloak" },
+  { id: "domain",  name: "Domain Expansion" },
+  { id: "void",    name: "Void Walker (black hole)" },
+  { id: "galaxy",  name: "Galaxy" },
+  { id: "katana",  name: "Katana" },
+  { id: "bankai",  name: "Crimson Bankai" },
+];
+
+function renderCustomArt(profile) {
+  const art = profile.customArt || {};
+  const rows = ART_SLOTS.map((slot) => {
+    const has = !!art[slot.id];
+    return `
+      <div class="art-slot">
+        <div class="art-thumb">${has ? `<img src="${art[slot.id]}" alt="" />` : "🖼️"}</div>
+        <div class="art-info">
+          <div class="art-name">${slot.name}</div>
+          <div class="art-sub">${has ? "Custom art active" : "Using the built-in effect"}</div>
+        </div>
+        <input type="file" accept="image/*" id="art-in-${slot.id}" class="art-file" hidden />
+        <label for="art-in-${slot.id}" class="btn ghost art-choose">${has ? "Replace" : "Choose"}</label>
+        ${has ? `<button class="btn ghost art-remove" data-art-remove="${slot.id}">✕</button>` : ""}
+      </div>`;
+  }).join("");
+  return `
+    <div class="field" style="margin-top:22px">
+      <label>🖼️ Custom Effect Art <span class="sub" style="font-size:11px">use your own image or GIF</span></label>
+      <div class="art-note">Pick an image/GIF from your device — it plays as that clap effect. Stored only on your device. Use art you own or that's free to use. GIFs animate; keep files under ~4 MB.</div>
+      <div class="art-list">${rows}</div>
+    </div>`;
+}
+
 // ---- Settings --------------------------------------------------------------
 export function renderSettings(profile) {
   const st = profile.settings;
@@ -484,6 +519,8 @@ export function renderSettings(profile) {
       ${toggle("set-mute", st.muteAll, "Mute everything", "Silence all music and sound")}
       ${toggle("set-cam", st.camOn, "Webcam window", "Show your live camera while playing")}
       ${toggle("set-motion", st.reducedMotion, "Reduced motion", "Fewer particles & screen effects (accessibility)")}
+
+      ${renderCustomArt(profile)}
 
       <div class="danger-zone">
         <div class="set-label" style="color:var(--bad)">Danger zone</div>

@@ -531,6 +531,23 @@ function wireSettings() {
     b.classList.add("active"); state.sfx.click();
   });
 
+  // Custom effect art uploads
+  $$(".art-file").forEach((input) => {
+    input.addEventListener("change", (e) => {
+      const id = input.id.replace("art-in-", "");
+      handleArtUpload(id, e.target.files && e.target.files[0]);
+    });
+  });
+  app.addEventListener("click", function artRemove(e) {
+    const rm = e.target.closest("[data-art-remove]");
+    if (!rm) return;
+    delete state.profile.customArt[rm.dataset.artRemove];
+    saveProfile(state.profile);
+    state.sfx.click();
+    app.removeEventListener("click", artRemove);
+    navTo("settings");
+  });
+
   const recal = $("#recalibrate");
   if (recal) recal.addEventListener("click", () => {
     state.profile.micCalibrated = false; saveProfile(state.profile);
@@ -759,7 +776,7 @@ function wireBossEvents(fight, cfg) {
     clapEmoji.classList.remove("pulse"); void clapEmoji.offsetWidth; clapEmoji.classList.add("pulse");
     comboEl.textContent = "x" + d.mult.toFixed(2);
     const r = figure.getBoundingClientRect();
-    state.fx.burst(r.left + r.width / 2, r.top + r.height / 2, aura, d.strength, d.combo);
+    clapFx(aura, r.left + r.width / 2, r.top + r.height / 2, d.strength, d.combo);
   });
 
   fight.addEventListener("blocked", () => {
@@ -896,6 +913,76 @@ function wireAdmin() {
 function xpTarget(level) { return Math.round(120 * Math.pow(level - 1, 1.55)); }
 
 // ---------------------------------------------------------------------------
+// Custom effect art — the player uploads their own image/GIF, played locally
+// ---------------------------------------------------------------------------
+const HEAVY_ART = { susanoo: 1, chakra: 1, domain: 1, void: 1, galaxy: 1, bankai: 1 };
+
+// Downscale + store an uploaded file as a data URL (GIFs kept as-is to animate).
+function handleArtUpload(effectId, file) {
+  if (!file) return;
+  if (!file.type.startsWith("image/")) { toast("Please choose an image or GIF", "⚠️"); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const raw = reader.result;
+    const store = (url) => {
+      if (url.length > 4.6 * 1024 * 1024) { toast("That file's too big — try one under ~4 MB", "⚠️"); return; }
+      state.profile.customArt[effectId] = url;
+      saveProfile(state.profile);
+      state.sfx.win();
+      toast("Custom art saved 🖼️", "✅");
+      navTo("settings");
+    };
+    if (file.type === "image/gif") return store(raw); // keep GIF animation
+    const img = new Image();
+    img.onload = () => {
+      const max = 700; let { width: w, height: h } = img;
+      const r = Math.min(1, max / Math.max(w, h)); w = Math.round(w * r); h = Math.round(h * r);
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      try { store(c.toDataURL("image/png")); } catch { store(raw); }
+    };
+    img.onerror = () => store(raw);
+    img.src = raw;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Play the uploaded image as an effect overlay (throttled for heavy ones).
+function playCustomArt(effect, x, y) {
+  const url = state.profile.customArt && state.profile.customArt[effect.id];
+  if (!url) return false;
+  const heavy = !!(HEAVY_ART[effect.id] || HEAVY_ART[effect.kind]);
+  const now = performance.now();
+  state._artCd = state._artCd || {};
+  if (now - (state._artCd[effect.id] || 0) < (heavy ? 1100 : 220)) return true;
+  state._artCd[effect.id] = now;
+
+  const wrap = document.createElement("div");
+  wrap.className = "custom-fx-wrap " + (heavy ? "heavy" : "light");
+  if (heavy && !state.profile.settings.reducedMotion) {
+    const bg = document.createElement("div"); bg.className = "custom-fx-bg"; wrap.appendChild(bg);
+  }
+  if (!heavy) { wrap.style.left = x + "px"; wrap.style.top = y + "px"; }
+  const im = document.createElement("img");
+  im.className = "custom-fx-img"; im.src = url; im.alt = "";
+  wrap.appendChild(im);
+  document.body.appendChild(wrap);
+  const life = heavy ? 1650 : 600;
+  setTimeout(() => { wrap.classList.add("out"); setTimeout(() => wrap.remove(), 400); }, life - 400);
+  return true;
+}
+
+// Unified clap visual: custom art if the equipped effect has it, else the
+// built-in canvas effect (a light spark accent still plays alongside art).
+function clapFx(effect, cx, cy, strength, combo) {
+  if (playCustomArt(effect, cx, cy)) {
+    state.fx.burst(cx, cy, { kind: "spark", colors: effect.colors || ["#b8a8ff", "#fff"] }, strength, Math.min(combo, 8));
+  } else {
+    state.fx.burst(cx, cy, effect, strength, combo);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Floating admin console — a button + overlay usable on ANY screen, including
 // mid-match. Opens over whatever you're doing so you can "admin abuse" live.
 // ---------------------------------------------------------------------------
@@ -939,8 +1026,8 @@ function buildAdminOverlay() {
   on("fab-coins", () => { p.goons.clapCoins += 5000; saveProfile(p); toast("+5,000 Clap Coins", "🪙"); });
   on("fab-drop", () => { p.jc += 500; saveProfile(p); state.fx.coinRain(80); state.sfx.jcGain(); refreshHud(); });
   on("fab-god", () => { p.godClap = !p.godClap; saveProfile(p); toast(`God Clap ${p.godClap ? "ON" : "OFF"}`, "🙏"); buildAdminOverlay(); });
-  on("fab-effect", () => { const a = effectById(p.equippedAura); state.fx.burst(innerWidth / 2, innerHeight / 2, a, 1, 20); state.sfx.aura(a.sfx, 20); });
-  on("fab-susanoo", () => { state.fx.guardianFlash(); state.sfx.aura("vboom"); });
+  on("fab-effect", () => { const a = effectById(p.equippedAura); clapFx(a, innerWidth / 2, innerHeight / 2, 1, 20); state.sfx.aura(a.sfx, 20); });
+  on("fab-susanoo", () => { if (!playCustomArt({ id: "susanoo", kind: "susanoo" }, innerWidth / 2, innerHeight / 2)) state.fx.guardianFlash(); state.sfx.aura("vboom"); });
   on("fab-win", () => {
     if (state.match && state.match.running) { state.match.tug = 100; state.match._finish ? state.match._finish() : state.match.end(); }
     else if (state.bossFight && state.bossFight.running) { state.bossFight.hp = 0; state.bossFight._finish(true); }
@@ -1211,7 +1298,7 @@ function wireMatchEvents(match, cfg) {
     setTimeout(() => comboEl.classList.remove("bump"), 100);
     clapEmoji.classList.remove("pulse"); void clapEmoji.offsetWidth; clapEmoji.classList.add("pulse");
     const rect = clapEmoji.getBoundingClientRect();
-    state.fx.burst(rect.left + rect.width / 2, rect.top + rect.height / 2, aura, strength, combo);
+    clapFx(aura, rect.left + rect.width / 2, rect.top + rect.height / 2, strength, combo);
     if (state.camera.on) {
       camWindow.classList.add("pulse");
       clearTimeout(state._camPulse);

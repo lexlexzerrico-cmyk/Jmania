@@ -959,6 +959,33 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .goon-chip.on { opacity: 1; box-shadow: 0 0 10px -2px var(--rc); }
 
 /* ============================================================
+   Custom effect art (user uploads)
+   ============================================================ */
+.art-note { font-size: 12px; color: var(--text-faint); line-height: 1.5; margin-bottom: 12px; }
+.art-list { display: flex; flex-direction: column; gap: 10px; }
+.art-slot { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r-md); background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); }
+.art-thumb { width: 46px; height: 46px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; font-size: 22px; background: rgba(0,0,0,0.3); border: 1px solid var(--stroke); flex-shrink: 0; }
+.art-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.art-info { flex: 1; min-width: 0; }
+.art-name { font-weight: 600; font-size: 13.5px; }
+.art-sub { font-size: 11px; color: var(--text-faint); }
+.art-choose { padding: 8px 14px; font-size: 12px; cursor: pointer; }
+.art-remove { padding: 8px 10px; font-size: 12px; border-color: var(--bad); color: var(--bad); }
+
+/* The overlay that plays your uploaded image/GIF as the effect */
+.custom-fx-wrap { position: fixed; z-index: 66; pointer-events: none; }
+.custom-fx-wrap.heavy { inset: 0; display: grid; place-items: center; }
+.custom-fx-wrap.light { transform: translate(-50%, -50%); }
+.custom-fx-bg { position: absolute; inset: 0; background: radial-gradient(circle, rgba(12,4,26,0.45), rgba(4,2,12,0.9)); animation: cfFade 1.7s ease forwards; }
+.custom-fx-img { display: block; filter: drop-shadow(0 0 34px rgba(140,90,255,0.6)); }
+.custom-fx-wrap.heavy .custom-fx-img { max-width: 72vw; max-height: 74vh; animation: cfPop 1.7s var(--ease) forwards; }
+.custom-fx-wrap.light .custom-fx-img { max-width: 160px; max-height: 160px; animation: cfPopLight 0.6s var(--ease) forwards; }
+.custom-fx-wrap.out { opacity: 0; transition: opacity 0.4s; }
+@keyframes cfPop { 0% { opacity: 0; transform: scale(0.5) rotate(-3deg); } 14% { opacity: 1; transform: scale(1.06); } 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.09); } }
+@keyframes cfPopLight { 0% { opacity: 0; transform: scale(0.4); } 40% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.12); } }
+@keyframes cfFade { 0% { opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ============================================================
    Floating admin console
    ============================================================ */
 .admin-fab { position: fixed; bottom: 78px; right: 22px; z-index: 78; width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--stroke-strong); background: linear-gradient(135deg, #ff2d6f, #b14dff); color: #fff; font-size: 22px; cursor: pointer; box-shadow: var(--shadow), 0 0 20px rgba(177,77,255,0.5); transition: transform 0.2s; }

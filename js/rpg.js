@@ -62,6 +62,84 @@ export const BOSSES = [
     taunt: "KNEEL BEFORE THE PALM." },
 ];
 
+// ============================================================
+// Infinite-run roster: 40 bosses + roaming entities
+// ------------------------------------------------------------
+// The 12 signature bosses above keep their unique title/effect drops. We
+// extend them with 28 procedurally-named bosses so the endless world always
+// has a tougher foe farther out. BOSS_ROSTER is sorted by HP; the world picks
+// a boss by "tier" (which grows with distance from spawn).
+// ============================================================
+const P_PREFIX = ["Turbo", "Cyber", "Blood", "Chaos", "Doom", "Iron", "Venom", "Ghost",
+  "Void", "Crimson", "Savage", "Ancient", "Feral", "Toxic", "Rune", "Nova",
+  "Diesel", "Shadow", "Hyper", "Rift", "Molten", "Glacier", "Plasma", "Obsidian",
+  "Wretched", "Titan", "Phantom", "Dread"];
+const P_ROOT = ["zilla", "lord", "fist", "maw", "fiend", "titan", "brute", "reaper",
+  "warden", "golem", "beast", "tyrant", "goliath", "wraith", "juggernaut",
+  "behemoth", "colossus", "stalker", "smasher", "howler"];
+const P_EMOJI = ["👾", "🦾", "💀", "🧟", "🐗", "🦂", "🦍", "🕷️", "🐙", "👿", "🤡", "🗿",
+  "🐉", "🦇", "👽", "🦈", "🐍", "🦅", "🐊", "🪳"];
+const P_TAUNT = ["You wandered too far.", "This is where you end.", "Clap and perish.",
+  "The world is mine.", "Another fool for the pile.", "You reek of weakness.",
+  "Turn back... too late.", "I've eaten stronger."];
+
+function pfrac(i, k) { const x = Math.sin(i * 97.13 + k * 41.7) * 43758.5453; return x - Math.floor(x); }
+
+function makeProcBoss(i) {
+  const name = P_PREFIX[Math.floor(pfrac(i, 1) * P_PREFIX.length)] + " " +
+    (P_ROOT[Math.floor(pfrac(i, 2) * P_ROOT.length)][0].toUpperCase() +
+     P_ROOT[Math.floor(pfrac(i, 2) * P_ROOT.length)].slice(1));
+  const emoji = P_EMOJI[Math.floor(pfrac(i, 3) * P_EMOJI.length)];
+  const hp = Math.round(500 + i * 240 + i * i * 22);
+  return {
+    id: "proc_" + i, name, emoji, title: "Wanderer's Bane",
+    hp, time: Math.min(60, 30 + Math.floor(i / 2)), regen: Math.min(10, 2 + Math.floor(i / 4)),
+    rewardJc: Math.round(120 + i * 55), rewardXp: Math.round(150 + i * 65),
+    taunt: P_TAUNT[Math.floor(pfrac(i, 4) * P_TAUNT.length)], proc: true,
+  };
+}
+
+export const BOSS_ROSTER = [...BOSSES, ...Array.from({ length: 28 }, (_, i) => makeProcBoss(i))]
+  .sort((a, b) => a.hp - b.hp);
+
+/** Pick a boss for a difficulty tier (0..). Clamps to the roster. */
+export function bossForTier(tier) {
+  return BOSS_ROSTER[Math.max(0, Math.min(BOSS_ROSTER.length - 1, tier))];
+}
+
+// Roaming entities — quick, weaker fights that pepper the world as you explore.
+// Their HP scales up with the tier you meet them in, so they never go stale.
+export const ENTITIES = [
+  { id: "clapimp",   name: "Clap Imp",      emoji: "👺", hp: 60,  time: 16, taunt: "hehe" },
+  { id: "slaprat",   name: "Slap Rat",      emoji: "🐀", hp: 45,  time: 14, taunt: "*squeak*" },
+  { id: "mittengob", name: "Mitten Goblin", emoji: "👹", hp: 90,  time: 18, taunt: "gimme claps" },
+  { id: "echowisp",  name: "Echo Wisp",     emoji: "👻", hp: 70,  time: 16, taunt: "..." },
+  { id: "palmslime", name: "Palm Slime",    emoji: "🟢", hp: 110, time: 18, taunt: "*squelch*" },
+  { id: "boombat",   name: "Boom Bat",      emoji: "🦇", hp: 80,  time: 15, taunt: "screee" },
+  { id: "sandcrab",  name: "Clap Crab",     emoji: "🦀", hp: 120, time: 18, taunt: "click click" },
+  { id: "thornboar", name: "Thorn Boar",    emoji: "🐗", hp: 140, time: 19, taunt: "SNORT" },
+  { id: "frostfox",  name: "Frost Fox",     emoji: "🦊", hp: 100, time: 17, taunt: "*chitter*" },
+  { id: "sporeling", name: "Sporeling",     emoji: "🍄", hp: 85,  time: 16, taunt: "spoooore" },
+  { id: "cindermoth", name: "Cinder Moth",  emoji: "🦋", hp: 95,  time: 16, taunt: "flutter" },
+  { id: "rockgolem", name: "Pebble Golem",  emoji: "🪨", hp: 170, time: 20, taunt: "...grrr" },
+  { id: "voidmite",  name: "Void Mite",     emoji: "🕷️", hp: 130, time: 18, taunt: "skitter" },
+  { id: "gustling",  name: "Gustling",      emoji: "🌀", hp: 90,  time: 16, taunt: "whooosh" },
+  { id: "emberpup",  name: "Ember Pup",     emoji: "🔥", hp: 110, time: 17, taunt: "yip yip" },
+  { id: "glimmerbug", name: "Glimmer Bug",  emoji: "✨", hp: 75,  time: 15, taunt: "*twinkle*" },
+];
+
+/** Build a scaled entity fight def for a given difficulty tier. */
+export function entityForTier(idx, tier) {
+  const e = ENTITIES[((idx % ENTITIES.length) + ENTITIES.length) % ENTITIES.length];
+  const mult = 1 + tier * 0.45;
+  return {
+    id: e.id, name: e.name, emoji: e.emoji, title: "Wild Entity",
+    hp: Math.round(e.hp * mult), time: e.time, regen: Math.min(4, Math.floor(tier / 3)),
+    rewardJc: Math.round((20 + tier * 12) ), rewardXp: Math.round((28 + tier * 16)),
+    taunt: e.taunt, entity: true,
+  };
+}
+
 const SHIELD_OPEN_MS = 7000;   // boss is vulnerable...
 const SHIELD_UP_MS = 1600;     // ...then shields briefly
 const ENRAGE_AT = 0.25;        // below 25% HP regen multiplies

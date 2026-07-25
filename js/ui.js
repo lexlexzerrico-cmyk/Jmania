@@ -209,12 +209,12 @@ export function renderLobby(profile) {
         <p>Endless, no timer, no stakes. Warm up, tune your mic, and chase your top CPS.</p>
         <div class="mc-go">Warm up <span class="arrow">→</span></div>
       </div>
-      <div class="mode-card" style="--mc:rgba(255,61,127,0.3)" data-nav="world">
-        <span class="mc-tag">${profile.rpgBeaten || 0}/${BOSSES.length} bosses</span>
+      <div class="mode-card" style="--mc:rgba(255,61,127,0.3)" data-play="jerkworld">
+        <span class="mc-tag">infinite · roguelike</span>
         <div class="mc-icon">🗺️</div>
         <h3>JerkWorld</h3>
-        <p>The boss-rush RPG. Clap down Jerkling, Clapzilla, the Palmfather… all the way to OMEGA JERKGOD.</p>
-        <div class="mc-go">Enter world <span class="arrow">→</span></div>
+        <p>An endless procedural world — forests, deserts, lakes, villages. Roam, fight 40+ bosses & roaming entities that get tougher the farther you go, grab treasure. Fresh run every time.</p>
+        <div class="mc-go">Start a run <span class="arrow">→</span></div>
       </div>
       <div class="mode-card" style="--mc:rgba(255,208,90,0.3)" data-nav="shop">
         <span class="mc-tag">${(profile.jc || 0).toLocaleString()} JC</span>
@@ -867,16 +867,23 @@ export function renderShop(profile) {
   </section>`;
 }
 
-// ---- JerkWorld map ---------------------------------------------------------
+// ---- JerkWorld — infinite roguelike overworld ------------------------------
 export function renderWorld(profile) {
-  const beaten = profile.rpgBeaten || 0;
-  const nextBoss = BOSSES[Math.min(beaten, BOSSES.length - 1)];
+  const run = profile.run || {};
+  const ws = profile.worldStats || {};
   return `
   <section class="screen">
-    <div class="section-title"><h2>🗺️ JerkWorld</h2><span class="sub">${beaten}/${BOSSES.length} bosses · 8-bit overworld</span></div>
+    <div class="section-title"><h2>🗺️ JerkWorld</h2><span class="sub">infinite run · explore forever</span></div>
+    <div class="world8-runbar">
+      <span class="wr-chip">🌱 <b id="wr-biome">Plains</b></span>
+      <span class="wr-chip">💀 <b id="wr-boss">${run.bossKills || 0}</b> bosses</span>
+      <span class="wr-chip">👾 <b id="wr-ent">${run.entityKills || 0}</b> entities</span>
+      <span class="wr-chip">🎁 <b id="wr-tres">${run.treasures || 0}</b></span>
+      <span class="wr-chip">🧭 <b id="wr-dist">0</b>m · T<b id="wr-tier">0</b></span>
+    </div>
     <div class="world8-frame">
       <canvas id="world8-canvas" class="world8-canvas"></canvas>
-      <div class="world8-hint" id="world8-hint">Walk onto the flashing <b style="color:var(--gold)">!</b> boss to fight · <b>WASD</b> / arrows / D-pad</div>
+      <div class="world8-hint" id="world8-hint">Explore! Walk into a flashing <b style="color:var(--gold)">!</b> boss, an entity, or 🎁 treasure · <b>WASD</b> / arrows / D-pad</div>
       <div class="dpad" id="dpad">
         <button class="dpad-btn up" data-dir="up">▲</button>
         <button class="dpad-btn left" data-dir="left">◀</button>
@@ -885,11 +892,12 @@ export function renderWorld(profile) {
       </div>
     </div>
     <div class="world8-legend">
-      ${beaten >= BOSSES.length
-        ? `<span class="world-clear-inline">👑 WORLD CLEARED — true JERKGOD</span>`
-        : `Next: <b>${nextBoss.name}</b> · ${nextBoss.title} · ${nextBoss.hp} HP`}
+      Farther out = tougher foes. Lifetime: <b>${ws.bossKills || 0}</b> bosses · <b>${ws.entityKills || 0}</b> entities slain.
     </div>
-    <div class="center mt-24"><button class="btn ghost" data-nav="lobby">← Back to lobby</button></div>
+    <div class="center mt-24" style="gap:10px">
+      <button class="btn" data-play="jerkworld">🎲 New Run</button>
+      <button class="btn ghost" data-nav="lobby">← Back to lobby</button>
+    </div>
   </section>`;
 }
 
@@ -987,8 +995,8 @@ export function renderBossResults(r, jcReport, xpGained, isNewKill, drops = {}) 
 
       <div class="row" style="justify-content:center">
         ${r.won
-          ? `<button class="btn big" data-nav="world">🗺️ Back to map</button>`
-          : `<button class="btn big" data-boss-retry="${BOSSES.indexOf(b)}">🔁 Retry</button>`}
+          ? `<button class="btn big" data-nav="world">🗺️ Back to the world</button>`
+          : `<button class="btn big" data-world-retry="1">🔁 Retry</button>`}
         <button class="btn ghost big" data-nav="lobby">🏠 Lobby</button>
       </div>
     </div>

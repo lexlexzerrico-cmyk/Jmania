@@ -12,7 +12,7 @@ import { Net, netSupported } from "./net.js";
 import { checkAchievements, ACHIEVEMENTS } from "./achievements.js";
 import { FxEngine, EFFECTS, effectById } from "./fx.js";
 import { BOSSES, BossFight } from "./rpg.js";
-import { World8Bit } from "./world8bit.js";
+import { World8Bit, newRunState } from "./world8bit.js";
 import { levelFromXp } from "./ranks.js";
 import { TITLES, titleById, unlockedTitles, grantTitle } from "./titles.js";
 import { questProgress, claimQuest, ensureQuests, questDef } from "./quests.js";
@@ -112,10 +112,8 @@ document.addEventListener("click", (e) => {
   if (nav) { state.sfx.click(); navTo(nav.dataset.nav); return; }
   const play = e.target.closest("[data-play]");
   if (play) { state.sfx.click(); startMode(play.dataset.play); return; }
-  const boss = e.target.closest("[data-boss]");
-  if (boss) { state.sfx.click(); startBoss(+boss.dataset.boss); return; }
-  const retry = e.target.closest("[data-boss-retry]");
-  if (retry) { state.sfx.click(); startBoss(+retry.dataset.bossRetry); return; }
+  const wretry = e.target.closest("[data-world-retry]");
+  if (wretry) { state.sfx.click(); if (state._worldEncounter) startEncounterFight(state._worldEncounter); else navTo("world"); return; }
 });
 
 // ---------------------------------------------------------------------------
@@ -148,8 +146,19 @@ function startMode(mode) {
   // match lives behind "Ranked vs bot" on the connect screen as a fallback.
   if (mode === "ranked") { navTo("connect"); return; }
   if (mode === "ranked-bot") { state.pending = buildConfig("ranked"); showMicPanel(); return; }
+  if (mode === "jerkworld") { startWorldRun(); return; }
   state.pending = buildConfig(mode);
   showMicPanel();
+}
+
+// Begin a FRESH roguelike run: new seed, new world, progress reset.
+function startWorldRun() {
+  state.profile.run = newRunState();
+  const ws = state.profile.worldStats || (state.profile.worldStats = { bossKills: 0, entityKills: 0, bestDist: 0, runs: 0 });
+  ws.runs = (ws.runs || 0) + 1;
+  saveProfile(state.profile);
+  state._worldResume = false;
+  navTo("world");
 }
 
 // ---------------------------------------------------------------------------
@@ -322,12 +331,7 @@ function wireLoadout() {
 function wireWorld8Bit() {
   const canvas = $("#world8-canvas");
   if (!canvas) return;
-  state.world8 = new World8Bit(canvas, state.profile, BOSSES, (bossIndex) => {
-    // encounter → open the boss battle
-    if (state.world8) { state.world8.destroy(); state.world8 = null; }
-    state.sfx.go();
-    startBoss(bossIndex);
-  });
+  state.world8 = new World8Bit(canvas, state.profile, onWorldEncounter);
   // Carry over admin toggles set from the floating console.
   state.world8.noclip = !!state._noclip;
   state.world8.eventsOn = state.worldEventsOn;
@@ -349,6 +353,19 @@ function wireWorld8Bit() {
       b.addEventListener("pointercancel", () => setDir(d, false));
     });
   }
+  // Live run HUD (biome / distance / tier / kills).
+  const hud = { biome: $("#wr-biome"), boss: $("#wr-boss"), ent: $("#wr-ent"), tres: $("#wr-tres"), dist: $("#wr-dist"), tier: $("#wr-tier") };
+  clearInterval(state._worldHudTimer);
+  state._worldHudTimer = setInterval(() => {
+    if (!state.world8) { clearInterval(state._worldHudTimer); return; }
+    const info = state.world8.runInfo();
+    if (hud.biome) hud.biome.textContent = info.biome;
+    if (hud.boss) hud.boss.textContent = info.bossKills;
+    if (hud.ent) hud.ent.textContent = info.entityKills;
+    if (hud.tres) hud.tres.textContent = info.treasures;
+    if (hud.dist) hud.dist.textContent = info.dist;
+    if (hud.tier) hud.tier.textContent = info.tier;
+  }, 250);
 }
 
 // ---------------------------------------------------------------------------
@@ -726,13 +743,38 @@ function showGemModal() {
 // ---------------------------------------------------------------------------
 // JerkWorld boss fights
 // ---------------------------------------------------------------------------
-function startBoss(index) {
-  const beaten = state.profile.rpgBeaten || 0;
-  if (index > beaten) { toast("Defeat the previous boss first", "🔒"); return; }
-  const boss = BOSSES[index];
-  if (!boss) return;
-  state.pending = { mode: "boss", label: `BOSS · ${boss.name.toUpperCase()}`, boss, bossIndex: index };
+// A boss/entity/treasure was walked into out in the infinite world.
+function onWorldEncounter(spawn) {
+  if (spawn.kind === "treasure") {
+    const jc = spawn.jc || 50;
+    state.profile.jc = (state.profile.jc || 0) + jc;
+    ensureRun().treasures = (state.profile.run.treasures || 0) + 1;
+    state.profile.run.jcEarned = (state.profile.run.jcEarned || 0) + jc;
+    saveProfile(state.profile);
+    state.fx.coinRain(28); state.sfx.jcGain(); refreshHud();
+    toast(`Treasure! +${jc.toLocaleString()} JC`, "🎁");
+    if (state.world8) state.world8.clearSpawn(spawn.key);
+    return;
+  }
+  // Boss or entity — leave the world and start the clap fight.
+  state._worldResume = true;
+  state._worldEncounter = spawn;
+  if (state.world8) { state.world8.destroy(); state.world8 = null; }
+  state.sfx.go();
+  startEncounterFight(spawn);
+}
+
+function startEncounterFight(spawn) {
+  const boss = spawn.def;
+  const label = (spawn.kind === "entity" ? "ENTITY · " : "BOSS · ") + boss.name.toUpperCase();
+  state.pending = { mode: "boss", label, boss, worldSpawn: spawn };
   showMicPanel();
+}
+
+function ensureRun() {
+  if (!state.profile.run || typeof state.profile.run.seed !== "number") state.profile.run = newRunState();
+  if (!state.profile.run.defeated) state.profile.run.defeated = {};
+  return state.profile.run;
 }
 
 function beginBossFight() {
@@ -832,40 +874,50 @@ function wireBossEvents(fight, cfg) {
   fight.addEventListener("end", (e) => {
     cleanupInputs();
     state.bossFight = null;
-    finishBossFight(e.detail, cfg.bossIndex);
+    finishBossFight(e.detail, cfg);
   });
 }
 
-function finishBossFight(r, bossIndex) {
+function finishBossFight(r, cfg) {
+  const spawn = cfg && cfg.worldSpawn;
+  const isEntity = !!(r.boss && r.boss.entity);
   let jcReport = null;
   let xpGained = 0;
   let isNewKill = false;
   const drops = { title: null, effect: null };   // unique first-kill drops for the results screen
   const prevLevel = levelFromXp(state.profile.xp);
+  const run = ensureRun();
 
   if (r.won) {
     state.sfx.bossDown();
     app.classList.add("shake");
     setTimeout(() => app.classList.remove("shake"), 500);
-    isNewKill = bossIndex === (state.profile.rpgBeaten || 0);
-    if (isNewKill) {
-      state.profile.rpgBeaten = bossIndex + 1;
-      // Claim the boss's mantle (title) + any unbuyable effect drop.
-      if (r.boss.dropTitle && !(state.profile.titles || []).includes(r.boss.dropTitle)) {
-        grantTitle(state.profile, r.boss.dropTitle);
-        drops.title = titleById(r.boss.dropTitle);
-      }
-      if (r.boss.dropEffect && !(state.profile.ownedAuras || []).includes(r.boss.dropEffect)) {
-        if (!Array.isArray(state.profile.ownedAuras)) state.profile.ownedAuras = ["none"];
-        state.profile.ownedAuras.push(r.boss.dropEffect);
-        drops.effect = effectById(r.boss.dropEffect);
-      }
+    // In the infinite world every spawn is a one-time kill.
+    isNewKill = true;
+    if (spawn) {
+      run.defeated[spawn.key] = 1;
+      if (isEntity) run.entityKills = (run.entityKills || 0) + 1;
+      else run.bossKills = (run.bossKills || 0) + 1;
     }
-    // Rematches pay 40% to keep farming honest.
-    const rewardJc = isNewKill ? r.boss.rewardJc : Math.round(r.boss.rewardJc * 0.4);
-    jcReport = earnJc(state.profile, { score: 0, totalClaps: r.totalClaps, won: true }, rewardJc);
-    xpGained = isNewKill ? r.boss.rewardXp : Math.round(r.boss.rewardXp * 0.4);
+    // Lifetime tallies across all runs.
+    const ws = state.profile.worldStats || (state.profile.worldStats = { bossKills: 0, entityKills: 0, bestDist: 0, runs: 0 });
+    if (isEntity) ws.entityKills = (ws.entityKills || 0) + 1; else ws.bossKills = (ws.bossKills || 0) + 1;
+
+    // Signature bosses grant a mantle title + unbuyable effect drop the first time ever.
+    if (r.boss.dropTitle && !(state.profile.titles || []).includes(r.boss.dropTitle)) {
+      grantTitle(state.profile, r.boss.dropTitle);
+      drops.title = titleById(r.boss.dropTitle);
+    }
+    if (r.boss.dropEffect && !(state.profile.ownedAuras || []).includes(r.boss.dropEffect)) {
+      if (!Array.isArray(state.profile.ownedAuras)) state.profile.ownedAuras = ["none"];
+      state.profile.ownedAuras.push(r.boss.dropEffect);
+      drops.effect = effectById(r.boss.dropEffect);
+    }
+
+    jcReport = earnJc(state.profile, { score: 0, totalClaps: r.totalClaps, won: true }, r.boss.rewardJc);
+    xpGained = r.boss.rewardXp;
     state.profile.xp += xpGained;
+    run.jcEarned = (run.jcEarned || 0) + (jcReport ? jcReport.total : r.boss.rewardJc);
     state.fx.coinRain(30);
   } else {
     state.sfx.lose();
@@ -874,7 +926,7 @@ function finishBossFight(r, bossIndex) {
   // Feed quests (boss kills, claps, cps) and title unlocks.
   questProgress(state.profile, {
     totalClaps: r.totalClaps, peakCps: r.peakCps, peakCombo: r.peakCombo,
-    won: r.won, hasOpponent: true, knockout: r.won, bossKill: r.won && isNewKill,
+    won: r.won, hasOpponent: true, knockout: r.won, bossKill: r.won && !isEntity,
   });
   checkTitleUnlocks(prevLevel);
   saveProfile(state.profile);

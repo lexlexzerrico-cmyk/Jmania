@@ -181,6 +181,7 @@ export class World8Bit {
   _solidAt(x, y) {
     const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
     if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) return true;
+    if (this.noclip) return false;   // admin: walk through everything
     return SOLID.has(this.map[ty][tx]);
   }
 

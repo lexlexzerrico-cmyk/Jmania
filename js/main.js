@@ -328,6 +328,9 @@ function wireWorld8Bit() {
     state.sfx.go();
     startBoss(bossIndex);
   });
+  // Carry over admin toggles set from the floating console.
+  state.world8.noclip = !!state._noclip;
+  state.world8.eventsOn = state.worldEventsOn;
   // Touch D-pad
   const dpad = $("#dpad");
   if (dpad) {
@@ -578,14 +581,15 @@ function wireSettings() {
   });
 
   $("#admin-access").addEventListener("click", () => {
-    if (state.profile.adminUnlocked) { navTo("admin"); return; }
+    if (state.profile.adminUnlocked) { openAdminConsole(); return; }
     passcodeModal((code) => {
       if (code && code.trim().toUpperCase() === ADMIN_CODE) {
         state.profile.adminUnlocked = true;
         saveProfile(state.profile);
         state.sfx.win();
-        toast("Admin access granted 🛠️", "🔓");
-        navTo("admin");
+        syncAdminFab();
+        toast("Admin access granted 🛠️ — drag the console anywhere, open it anytime with the 🛠️ button", "🔓");
+        openAdminConsole();
       } else if (code) {
         toast("Wrong passcode", "🔒");
       }
@@ -1023,46 +1027,174 @@ adminFab.addEventListener("click", () => {
   if (!adminOverlay.classList.contains("hidden")) buildAdminOverlay();
 });
 
+// Open the floating console (used by the settings "admin access" button too).
+function openAdminConsole() {
+  if (!state.profile.adminUnlocked) return;
+  adminOverlay.classList.remove("hidden");
+  buildAdminOverlay();
+}
+
 function buildAdminOverlay() {
   const p = state.profile;
   const q = (id, icon, label) => `<button class="afab-btn" id="${id}"><span>${icon}</span>${label}</button>`;
+  const minimized = state._adminMin ? "min" : "";
   adminOverlay.innerHTML = `
-    <div class="afab-panel">
-      <div class="afab-title">🛠️ QUICK ADMIN <button class="afab-close" id="afab-x">✕</button></div>
-      <div class="afab-grid">
-        ${q("fab-jc", "💰", "+10k JC")}
-        ${q("fab-coins", "🪙", "+5k Clap Coins")}
-        ${q("fab-drop", "🌧️", "JC Drop")}
-        ${q("fab-god", "🙏", p.godClap ? "God Clap ON" : "God Clap OFF")}
-        ${q("fab-effect", "💥", "Test Effect")}
-        ${q("fab-susanoo", "👹", "Susanoo")}
-        ${q("fab-win", "🏆", "Win Match")}
-        ${q("fab-event", state.worldEventsOn ? "🎲" : "🚫", state.worldEventsOn ? "Events ON" : "Events OFF")}
-        ${q("fab-goons", "🃏", "Unlock Goons")}
-        ${q("fab-lvl", "⭐", "+10 Levels")}
-        ${q("fab-full", "🖥️", "Full Console")}
-        ${q("fab-target", "🎯", "Admin Another")}
+    <div class="afab-panel ${minimized}" id="afab-win">
+      <div class="afab-titlebar" id="afab-drag">
+        <div class="afab-title">🛠️ DEV CONSOLE</div>
+        <div class="afab-winbtns">
+          <button id="afab-min" title="Minimize/restore">${state._adminMin ? "▢" : "▁"}</button>
+          <button id="afab-x" title="Close">✕</button>
+        </div>
+      </div>
+      <div class="afab-scroll">
+        <div class="afab-sec">💰 Currency</div>
+        <div class="afab-grid">
+          ${q("fab-jc", "💰", "+10k JC")}
+          ${q("fab-jc100", "🏦", "+100k JC")}
+          ${q("fab-coins", "🪙", "+5k Coins")}
+          ${q("fab-gems", "💎", "+1k Gems")}
+          ${q("fab-drop", "🌧️", "JC Drop")}
+          ${q("fab-boost", "⚡", "2× Boost")}
+        </div>
+        <div class="afab-sec">📈 Progression</div>
+        <div class="afab-grid">
+          ${q("fab-lvl", "⭐", "+10 Levels")}
+          ${q("fab-rankup", "⬆️", "+1 Division")}
+          ${q("fab-radiant", "🌟", "Max Rank")}
+          ${q("fab-ach", "🏅", "All Achieve")}
+          ${q("fab-bosses", "🗺️", "All Bosses")}
+          ${q("fab-quests", "📋", "All Quests")}
+        </div>
+        <div class="afab-sec">✨ Cosmetics</div>
+        <div class="afab-grid">
+          ${q("fab-auras", "🎨", "All Effects")}
+          ${q("fab-effect", "💥", "Test Effect")}
+          ${q("fab-rinnegan", "🟣", "Rinnegan")}
+          ${q("fab-susanoo", "👹", "Susanoo")}
+          ${q("fab-titles", "🏷️", "All Titles")}
+          ${q("fab-premium", "★", p.premium ? "Un-Premium" : "Premium")}
+        </div>
+        <div class="afab-sec">🎮 Game</div>
+        <div class="afab-grid">
+          ${q("fab-god", p.godClap ? "🙏" : "😇", p.godClap ? "God ON" : "God OFF")}
+          ${q("fab-win", "🏆", "Win Now")}
+          ${q("fab-heal", "💗", "Refill Boss")}
+          ${q("fab-noclip", state._noclip ? "👻" : "🧱", state._noclip ? "Noclip ON" : "Noclip OFF")}
+          ${q("fab-event", state.worldEventsOn ? "🎲" : "🚫", state.worldEventsOn ? "Events ON" : "Events OFF")}
+          ${q("fab-goons", "🃏", "Unlock Goons")}
+        </div>
+        <div class="afab-sec">🧰 Utility</div>
+        <div class="afab-grid">
+          ${q("fab-daily", "📅", "Reset Daily")}
+          ${q("fab-playtime", "⏱️", "+10m Play")}
+          ${q("fab-history", "🧹", "Clr History")}
+          ${q("fab-target", "🎯", "Admin Other")}
+          ${q("fab-lock", "🔒", "Lock Admin")}
+          ${q("fab-reset", "💣", "FULL RESET")}
+        </div>
       </div>
     </div>`;
+
+  positionAdminWin();
+  makeAdminDraggable();
+
   const on = (id, fn) => { const el = $("#" + id); if (el) el.addEventListener("click", () => { fn(); state.sfx.click(); }); };
+  const save = () => saveProfile(p);
+
+  // window chrome
   on("afab-x", () => adminOverlay.classList.add("hidden"));
-  on("fab-jc", () => { p.jc += 10000; saveProfile(p); refreshHud(); toast("+10,000 JC", "💰"); });
-  on("fab-coins", () => { p.goons.clapCoins += 5000; saveProfile(p); toast("+5,000 Clap Coins", "🪙"); });
-  on("fab-drop", () => { p.jc += 500; saveProfile(p); state.fx.coinRain(80); state.sfx.jcGain(); refreshHud(); });
-  on("fab-god", () => { p.godClap = !p.godClap; saveProfile(p); toast(`God Clap ${p.godClap ? "ON" : "OFF"}`, "🙏"); buildAdminOverlay(); });
+  on("afab-min", () => { state._adminMin = !state._adminMin; buildAdminOverlay(); });
+
+  // currency
+  on("fab-jc", () => { p.jc += 10000; save(); refreshHud(); toast("+10,000 JC", "💰"); });
+  on("fab-jc100", () => { p.jc += 100000; save(); refreshHud(); toast("+100,000 JC", "🏦"); });
+  on("fab-coins", () => { p.goons.clapCoins += 5000; save(); toast("+5,000 Clap Coins", "🪙"); });
+  on("fab-gems", () => { p.gems += 1000; save(); refreshHud(); toast("+1,000 Gems", "💎"); });
+  on("fab-drop", () => { p.jc += 500; save(); state.fx.coinRain(80); state.sfx.jcGain(); refreshHud(); });
+  on("fab-boost", () => { p.boostUntil = Math.max(Date.now(), p.boostUntil || 0) + BOOST_MS; save(); toast("2× boost +20 min", "⚡"); });
+
+  // progression
+  on("fab-lvl", () => { const lp = levelProgress(p.xp); p.xp = xpTarget(lp.level + 10); save(); refreshHud(); toast(`Level ${lp.level + 10}`, "⭐"); });
+  on("fab-rankup", () => { if (p.rankIndex < MAX_RANK_INDEX) p.rankIndex++; save(); refreshHud(); toast(`Rank: ${rankFromIndex(p.rankIndex).label}`, "⬆️"); });
+  on("fab-radiant", () => { p.rankIndex = MAX_RANK_INDEX; p.rr = 100; save(); refreshHud(); toast("RADIANT.", "🌟"); });
+  on("fab-ach", () => { p.achievements = ACHIEVEMENTS.map((a) => a.id); save(); toast("All achievements unlocked", "🏅"); });
+  on("fab-bosses", () => { p.rpgBeaten = BOSSES.length; save(); toast("All bosses beaten", "🗺️"); });
+  on("fab-quests", () => { const qz = ensureQuests(p); qz.items.forEach((it) => { const d = questDef(it.id); if (d) it.prog = d.target; }); save(); toast("All quests ready to claim", "📋"); });
+
+  // cosmetics
+  on("fab-auras", () => { p.ownedAuras = EFFECTS.map((a) => a.id); save(); toast("Every effect unlocked", "🎨"); });
   on("fab-effect", () => { const a = effectById(p.equippedAura); clapFx(a, innerWidth / 2, innerHeight / 2, 1, 20); state.sfx.aura(a.sfx, 20); });
-  on("fab-susanoo", () => { if (!playCustomArt({ id: "susanoo", kind: "susanoo" }, innerWidth / 2, innerHeight / 2)) state.fx.guardianFlash(); state.sfx.aura("vboom"); });
+  on("fab-rinnegan", () => { if (!p.ownedAuras.includes("rinnegan")) p.ownedAuras.push("rinnegan"); p.equippedAura = "rinnegan"; save(); state.fx.burst(innerWidth / 2, innerHeight / 2, effectById("rinnegan"), 1, 20); state.sfx.aura("gong", 20); toast("Rinnegan equipped 🟣", "👁️"); });
+  on("fab-susanoo", () => { if (!p.ownedAuras.includes("susanoo")) p.ownedAuras.push("susanoo"); p.equippedAura = "susanoo"; save(); if (!playCustomArt({ id: "susanoo", kind: "susanoo" }, innerWidth / 2, innerHeight / 2)) state.fx.guardianFlash(); state.sfx.aura("vboom"); toast("Spectral Guardian equipped", "👹"); });
+  on("fab-titles", () => { TITLES.forEach((t) => grantTitle(p, t.id)); save(); toast("All titles granted", "🏷️"); });
+  on("fab-premium", () => { p.premium = !p.premium; save(); toast(p.premium ? "Premium granted" : "Premium revoked", "★"); buildAdminOverlay(); });
+
+  // game
+  on("fab-god", () => { p.godClap = !p.godClap; save(); toast(`God Clap ${p.godClap ? "ON — 10× boss dmg" : "OFF"}`, "🙏"); buildAdminOverlay(); });
   on("fab-win", () => {
-    if (state.match && state.match.running) { state.match.tug = 100; state.match._finish ? state.match._finish() : state.match.end(); }
+    if (state.match && state.match.running) { state.match.tug = 100; state.match.youPush = 1e9; state.match._finish(); }
     else if (state.bossFight && state.bossFight.running) { state.bossFight.hp = 0; state.bossFight._finish(true); }
     else toast("No active match", "🤷");
-    adminOverlay.classList.add("hidden");
   });
+  on("fab-heal", () => { if (state.bossFight && state.bossFight.running) { state.bossFight.hp = state.bossFight.boss.hp; toast("Boss HP refilled", "💗"); } else toast("No active boss", "🤷"); });
+  on("fab-noclip", () => { state._noclip = !state._noclip; if (state.world8) state.world8.noclip = state._noclip; toast(`Noclip ${state._noclip ? "ON — walk through walls" : "OFF"}`, state._noclip ? "👻" : "🧱"); buildAdminOverlay(); });
   on("fab-event", () => { state.worldEventsOn = !state.worldEventsOn; if (state.world8) state.world8.eventsOn = state.worldEventsOn; toast(`World events ${state.worldEventsOn ? "ON" : "OFF"}`, "🎲"); buildAdminOverlay(); });
-  on("fab-goons", () => { SKILLS.forEach((s) => { p.goons.owned[s.id] = Math.max(1, p.goons.owned[s.id] || 0); }); saveProfile(p); toast("All Goons unlocked", "🃏"); });
-  on("fab-lvl", () => { const lp = levelProgress(p.xp); p.xp = xpTarget(lp.level + 10); saveProfile(p); refreshHud(); toast(`Level ${lp.level + 10}`, "⭐"); });
-  on("fab-full", () => { adminOverlay.classList.add("hidden"); navTo("admin"); });
+  on("fab-goons", () => { SKILLS.forEach((s) => { p.goons.owned[s.id] = Math.max(1, p.goons.owned[s.id] || 0); }); save(); toast("All Goons unlocked", "🃏"); });
+
+  // utility
+  on("fab-daily", () => { p.lastDaily = null; save(); toast("Daily reward reset", "📅"); });
+  on("fab-playtime", () => { p.playSeconds = (p.playSeconds || 0) + 600; save(); toast("+10 min playtime", "⏱️"); });
+  on("fab-history", () => { p.history = []; save(); toast("History cleared", "🧹"); });
   on("fab-target", () => { adminOverlay.classList.add("hidden"); adminTargetModal(); });
+  on("fab-lock", () => { p.adminUnlocked = false; save(); syncAdminFab(); adminOverlay.classList.add("hidden"); toast("Admin locked", "🔒"); });
+  on("fab-reset", () => {
+    confirmModal("FULL RESET — wipe rank, level, JC, gems, effects, bosses, everything?", () => {
+      state.profile = resetProfile();
+      state.clap.setSensitivity(state.profile.settings.sensitivity);
+      state.sfx.setEnabled(state.profile.settings.sfxOn);
+      applyTheme(state.profile.settings.theme);
+      adminOverlay.classList.add("hidden");
+      toast("Everything wiped. Clean slate.", "💣");
+      navTo("lobby");
+    }, { danger: true });
+  });
+}
+
+// Restore last window position (or center-right on first open).
+function positionAdminWin() {
+  const win = $("#afab-win");
+  if (!win) return;
+  if (!state._adminPos) {
+    const w = Math.min(440, innerWidth - 24);
+    state._adminPos = { x: Math.max(12, innerWidth - w - 20), y: 74 };
+  }
+  const w = win.offsetWidth || 440, h = 80;
+  state._adminPos.x = Math.max(6, Math.min(innerWidth - w, state._adminPos.x));
+  state._adminPos.y = Math.max(6, Math.min(innerHeight - h, state._adminPos.y));
+  win.style.left = state._adminPos.x + "px";
+  win.style.top = state._adminPos.y + "px";
+}
+
+// Drag the console by its title bar (pointer events → works on touch too).
+function makeAdminDraggable() {
+  const win = $("#afab-win"), bar = $("#afab-drag");
+  if (!win || !bar) return;
+  const down = (e) => {
+    if (e.target.closest(".afab-winbtns")) return;   // don't drag from the buttons
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const ox = state._adminPos.x, oy = state._adminPos.y;
+    const move = (ev) => {
+      state._adminPos.x = ox + (ev.clientX - startX);
+      state._adminPos.y = oy + (ev.clientY - startY);
+      positionAdminWin();
+    };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  bar.addEventListener("pointerdown", down);
 }
 
 // "Admin another person" — apply an admin action to a named profile export you

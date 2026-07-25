@@ -1029,13 +1029,23 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
    ============================================================ */
 .admin-fab { position: fixed; bottom: 78px; right: 22px; z-index: 78; width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--stroke-strong); background: linear-gradient(135deg, #ff2d6f, #b14dff); color: #fff; font-size: 22px; cursor: pointer; box-shadow: var(--shadow), 0 0 20px rgba(177,77,255,0.5); transition: transform 0.2s; }
 .admin-fab:hover { transform: scale(1.1) rotate(20deg); }
-.admin-overlay { position: fixed; inset: 0; z-index: 92; display: grid; place-items: center; background: rgba(5,3,12,0.55); backdrop-filter: blur(4px); }
-.afab-panel { width: min(420px, calc(100vw - 32px)); padding: 18px; border-radius: var(--r-lg); background: var(--panel-solid); border: 1px solid var(--stroke-strong); box-shadow: var(--shadow); animation: screenIn 0.25s var(--ease); }
-.afab-title { font-family: var(--font-display); font-size: 15px; letter-spacing: 1px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.afab-close { background: none; border: none; color: var(--text); font-size: 18px; cursor: pointer; }
-.afab-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.afab-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--stroke); color: var(--text); cursor: pointer; font-size: 11px; text-align: center; transition: all 0.15s; }
-.afab-btn span { font-size: 22px; }
+/* Non-blocking overlay: the console floats over the game and you can still
+   play behind it — only the window itself captures clicks. */
+.admin-overlay { position: fixed; inset: 0; z-index: 96; pointer-events: none; }
+.afab-panel { position: absolute; pointer-events: auto; width: min(440px, calc(100vw - 20px)); max-height: 80vh; display: flex; flex-direction: column; border-radius: var(--r-lg); background: var(--panel-solid); border: 1px solid var(--stroke-strong); box-shadow: 0 26px 64px -14px rgba(0,0,0,0.75); overflow: hidden; animation: screenIn 0.18s var(--ease); }
+.afab-titlebar { cursor: grab; touch-action: none; user-select: none; display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: linear-gradient(90deg, rgba(62,224,138,0.18), rgba(177,77,255,0.18)); border-bottom: 1px solid var(--stroke); }
+.afab-titlebar:active { cursor: grabbing; }
+.afab-title { font-family: var(--font-display); font-size: 13px; letter-spacing: 1px; }
+.afab-winbtns { display: flex; gap: 6px; }
+.afab-winbtns button { width: 26px; height: 24px; border-radius: 6px; border: 1px solid var(--stroke); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; font-size: 12px; line-height: 1; }
+.afab-winbtns button:hover { border-color: var(--accent); }
+.afab-scroll { overflow-y: auto; padding: 12px; }
+.afab-panel.min .afab-scroll { display: none; }
+.afab-sec { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); margin: 13px 0 7px; }
+.afab-sec:first-child { margin-top: 0; }
+.afab-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.afab-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 11px 5px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--stroke); color: var(--text); cursor: pointer; font-size: 10.5px; text-align: center; transition: all 0.15s; }
+.afab-btn span { font-size: 20px; }
 .afab-btn:hover { border-color: var(--accent); box-shadow: var(--glow-accent); transform: translateY(-2px); }
 
 /* ============================================================

@@ -32,6 +32,7 @@ export const EFFECTS = [
   { id: "chakra",   name: "Nine-Tailed Cloak", price: 2800, rarity: "legendary", kind: "chakra",    sfx: "roar",    colors: ["#ff9f3a", "#ffd05a", "#ff5b2d"], desc: "A burning chakra cloak erupts around you — nine tails of fire whip outward." },
   { id: "bankai",   name: "Crimson Bankai",    price: 1800, rarity: "legendary", kind: "bankai",    sfx: "hslash",  colors: ["#ff1f3d", "#8f0f22", "#000000"], desc: "A colossal black-red crescent wave tears across the whole screen." },
   { id: "domain",   name: "Domain Expansion",  price: 3200, rarity: "legendary", kind: "domain",    sfx: "gong",    colors: ["#b14dff", "#3d1a66", "#e8d8ff"], desc: "Reality inverts — an expanding rune circle swallows the arena.", screenFlash: "rgba(60,10,90,0.18)" },
+  { id: "rinnegan", name: "Rinnegan",          price: 3400, rarity: "legendary", kind: "rinnegan",  sfx: "gong",    colors: ["#b06bd6", "#7a3d9e", "#2a1040"], desc: "A great rippling purple eye opens over the arena — concentric rings and slow-spinning tomoe. Pure genjutsu energy.", screenFlash: "rgba(90,40,140,0.12)" },
   // ---- BOSS DROPS: unbuyable, only earned by beating a JerkWorld boss ----
   { id: "bfx_kaiju",     name: "Kaiju Stomp",       price: 0, rarity: "boss", kind: "bomb",    sfx: "boom",  colors: ["#7CFC00", "#ffd05a", "#3a5f1a"], boss: "Clapzilla",     desc: "BOSS DROP — Clapzilla's radioactive stomp levels the block.", screenFlash: "rgba(120,255,40,0.12)" },
   { id: "bfx_overclock", name: "Overclock",         price: 0, rarity: "boss", kind: "glyph",   sfx: "zap",   colors: ["#ff2d5a", "#ff8f3a", "#ffffff"], boss: "Jerkinator 3000", desc: "BOSS DROP — Jerkinator's red error-code rain floods the screen." },
@@ -94,18 +95,24 @@ export class FxEngine {
     let k = effect.kind;
     const n = 12 + Math.round(strength * 10) + Math.round(combo / 4);
 
-    // Heavy full-screen ultimates (blackhole/galaxy/chakra/bankai/domain) are
-    // throttled so rapid clapping doesn't spawn one per clap. Between ultimates
-    // a light themed spark burst plays instead, so every clap still reacts.
-    const HEAVY = { blackhole: 1, galaxy: 1, chakra: 1, bankai: 1, domain: 1 };
+    // Heavy full-screen ultimates are throttled so rapid clapping doesn't spawn
+    // one per clap (that flicker was dizzying). Rules: never overlap the same
+    // ultimate, and enforce a long REST after one plays so it lingers and fully
+    // fades before the next. Between ultimates a light themed spark plays, so
+    // every clap still reacts.
+    const HEAVY = { blackhole: 1, galaxy: 1, chakra: 1, bankai: 1, domain: 1, rinnegan: 1 };
+    let heavySpawn = false;
     if (HEAVY[k]) {
       const now = performance.now();
       if (!this._specialCd) this._specialCd = {};
-      const cd = k === "bankai" ? 650 : 1050;
-      if (now - (this._specialCd[k] || 0) < cd) {
+      const rest = k === "bankai" ? 1400 : 2600;   // ms of calm after each ultimate
+      const active = this.specials.some((s) => s.type === k) || (k === "chakra" && this.guardianT > 0);
+      const last = this._specialCd[k];             // undefined = never spawned yet
+      if (active || (last !== undefined && now - last < rest)) {
         k = "spark";                       // fall through to a light burst
       } else {
         this._specialCd[k] = now;
+        heavySpawn = true;
       }
     }
 
@@ -163,29 +170,34 @@ export class FxEngine {
       case "glyph":
         for (let i = 0; i < n; i++) this._spawn(x + rnd(-50, 50), y - 30, { vx: 0, vy: rnd(2, 6), size: rnd(6, 11) * SCALE * 0.8, color: this._col(effect, i), shape: "glyph", grav: 0.05, decay: 0.018, glyph: GLYPHS[Math.floor(Math.random() * GLYPHS.length)] });
         break;
-      // ---- animated specials ----
+      // ---- animated specials (longer, smoother durations) ----
       case "blackhole": {
-        this.specials.push({ type: "blackhole", x, y, t: 0, dur: 1.4 });
-        for (let i = 0; i < 22; i++) { const a = rnd(0, 7), d = rnd(80, 170); this._spawn(x + Math.cos(a) * d, y + Math.sin(a) * d, { size: rnd(3, 6) * SCALE, color: this._col(effect, i), sink: { x, y, pull: rnd(0.12, 0.2) }, grav: 0, decay: 0.018 }); }
+        this.specials.push({ type: "blackhole", x, y, t: 0, dur: 2.2 });
+        for (let i = 0; i < 22; i++) { const a = rnd(0, 7), d = rnd(80, 170); this._spawn(x + Math.cos(a) * d, y + Math.sin(a) * d, { size: rnd(3, 6) * SCALE, color: this._col(effect, i), sink: { x, y, pull: rnd(0.12, 0.2) }, grav: 0, decay: 0.014 }); }
         break;
       }
       case "galaxy":
-        this.specials.push({ type: "galaxy", x, y, t: 0, dur: 1.8, seed: Math.random() * 7 });
+        this.specials.push({ type: "galaxy", x, y, t: 0, dur: 2.6, seed: Math.random() * 7 });
         break;
       case "chakra":
-        this.specials.push({ type: "chakra", x, y, t: 0, dur: 1.0 });
-        for (let i = 0; i < 14; i++) this._spawn(x + rnd(-40, 40), y + rnd(-10, 30), { vx: rnd(-1.5, 1.5), vy: rnd(-7, -3), size: rnd(6, 12) * SCALE * 0.9, color: this._col(effect, i), shape: "flame", grav: -0.08, decay: 0.026 });
+        this.specials.push({ type: "chakra", x, y, t: 0, dur: 1.8 });
+        for (let i = 0; i < 14; i++) this._spawn(x + rnd(-40, 40), y + rnd(-10, 30), { vx: rnd(-1.5, 1.5), vy: rnd(-7, -3), size: rnd(6, 12) * SCALE * 0.9, color: this._col(effect, i), shape: "flame", grav: -0.08, decay: 0.022 });
         break;
       case "bankai":
-        this.specials.push({ type: "bankai", x, y, t: 0, dur: 0.7, dir: Math.random() < 0.5 ? 1 : -1 });
+        this.specials.push({ type: "bankai", x, y, t: 0, dur: 0.95, dir: Math.random() < 0.5 ? 1 : -1 });
         break;
       case "domain":
-        this.specials.push({ type: "domain", x, y, t: 0, dur: 1.5 });
+        this.specials.push({ type: "domain", x, y, t: 0, dur: 2.4 });
+        break;
+      case "rinnegan":
+        this.specials.push({ type: "rinnegan", x, y, t: 0, dur: 2.6 });
         break;
       default:
         for (let i = 0; i < n; i++) { const a = rnd(0, 7); this._spawn(x, y, { vx: Math.cos(a) * rnd(2, 7), vy: Math.sin(a) * rnd(2, 7) - 2, size: rnd(3, 7) * SCALE * 0.9, color: this._col(effect, i), grav: 0.12, decay: 0.028 }); }
     }
-    if (effect.screenFlash) this._flash(effect.screenFlash);
+    // Only flash when a heavy ultimate actually spawned (not on the light
+    // fallback), and the flash itself is rate-limited — no per-clap strobing.
+    if (effect.screenFlash && (!HEAVY[effect.kind] || heavySpawn)) this._flash(effect.screenFlash);
     if (effect.guardian && combo > 0 && combo % 12 === 0) this.guardianFlash();
     this._wake();
   }
@@ -199,6 +211,9 @@ export class FxEngine {
   guardianFlash() { if (!this.off) { this.guardianT = 0.0001; this._wake(); } }
 
   _flash(color) {
+    const now = performance.now();
+    if (now - (this._lastFlash || 0) < 420) return;   // never strobe the screen
+    this._lastFlash = now;
     const el = document.createElement("div");
     el.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:64;background:${color};transition:opacity .25s;`;
     document.body.appendChild(el);
@@ -519,6 +534,53 @@ export class FxEngine {
         i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
       }
       ctx.closePath(); ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    if (sp.type === "rinnegan") {
+      // ===================== RINNEGAN — rippling purple eye + tomoe =====================
+      const W = innerWidth, H = innerHeight;
+      const cx = W / 2, cy = H * 0.46;
+      const R = Math.min(W, H) * (0.30 + p * 0.05);        // opens/grows a touch
+      // 1) Gentle purple darken (softer than Domain so it's not harsh on the eyes)
+      this._screenVignette(fade * 0.5, "rgba(44,16,72,0.4)", "rgba(8,2,16,0.86)");
+      ctx.save(); ctx.globalAlpha = fade;
+      // 2) Outer glow halo
+      const halo = ctx.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 1.6);
+      halo.addColorStop(0, "rgba(176,107,214,0.45)");
+      halo.addColorStop(0.55, "rgba(122,61,158,0.22)");
+      halo.addColorStop(1, "rgba(60,20,90,0)");
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(cx, cy, R * 1.6, 0, 7); ctx.fill();
+      // 3) Iris — purple radial
+      const iris = ctx.createRadialGradient(cx, cy, R * 0.06, cx, cy, R);
+      iris.addColorStop(0, "#a86fd0"); iris.addColorStop(0.7, "#8a4fb4"); iris.addColorStop(1, "#5f2f86");
+      ctx.fillStyle = iris; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.fill();
+      // 4) Concentric ripple rings
+      ctx.strokeStyle = "rgba(18,6,30,0.92)"; ctx.lineWidth = Math.max(2, R * 0.016);
+      const rings = 4;
+      for (let i = 1; i <= rings; i++) { const rr = R * (i / (rings + 1)); ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 7); ctx.stroke(); }
+      // 5) Tomoe — 3 on an outer ring + 3 on an inner ring, counter-rotating
+      const tomoe = (tx, ty, tr, rot) => {
+        ctx.save(); ctx.translate(tx, ty); ctx.rotate(rot); ctx.fillStyle = "#120420";
+        ctx.beginPath(); ctx.arc(0, 0, tr, 0, 7); ctx.fill();                    // head
+        ctx.beginPath();                                                         // curved comma tail
+        ctx.moveTo(-tr * 0.15, -tr * 0.95);
+        ctx.quadraticCurveTo(tr * 2.6, -tr * 1.5, tr * 0.85, tr * 0.35);
+        ctx.quadraticCurveTo(tr * 0.6, -tr * 0.35, -tr * 0.15, -tr * 0.95);
+        ctx.fill(); ctx.restore();
+      };
+      const ringR1 = R * (rings / (rings + 1)) - R * 0.02, tr1 = R * 0.075;
+      const ringR2 = R * (2 / (rings + 1)) - R * 0.01, tr2 = R * 0.06;
+      for (let i = 0; i < 3; i++) {
+        const a1 = sp.t * 0.9 + i * (Math.PI * 2 / 3);
+        tomoe(cx + Math.cos(a1) * ringR1, cy + Math.sin(a1) * ringR1, tr1, a1 + Math.PI / 2);
+        const a2 = -sp.t * 1.2 + i * (Math.PI * 2 / 3) + 0.5;
+        tomoe(cx + Math.cos(a2) * ringR2, cy + Math.sin(a2) * ringR2, tr2, a2 + Math.PI / 2);
+      }
+      // 6) Central pupil + glint
+      ctx.fillStyle = "#120420"; ctx.beginPath(); ctx.arc(cx, cy, R * 0.075, 0, 7); ctx.fill();
+      ctx.fillStyle = "rgba(210,170,245,0.55)"; ctx.beginPath(); ctx.arc(cx - R * 0.02, cy - R * 0.02, R * 0.025, 0, 7); ctx.fill();
       ctx.restore();
       return;
     }

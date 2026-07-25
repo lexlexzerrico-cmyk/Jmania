@@ -1,0 +1,16 @@
+{
+  "name": "jerkmania-signal",
+  "version": "1.0.0",
+  "description": "Tiny WebRTC signaling / matchmaking relay for JERKMANIA online 1v1.",
+  "type": "module",
+  "main": "jerk-signal.mjs",
+  "scripts": {
+    "start": "node jerk-signal.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

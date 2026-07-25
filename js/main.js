@@ -8,6 +8,7 @@ import { Camera } from "./camera.js";
 import { LobbyMusic } from "./music.js";
 import { Sfx } from "./sfx.js";
 import { Match, makeBot } from "./game.js";
+import { Net, netSupported } from "./net.js";
 import { checkAchievements, ACHIEVEMENTS } from "./achievements.js";
 import { FxEngine, EFFECTS, effectById } from "./fx.js";
 import { BOSSES, BossFight } from "./rpg.js";
@@ -29,7 +30,7 @@ import {
   renderMicPanel, renderArena, renderResults, renderAchievements, renderSettings,
   renderShop, renderWorld, renderBossFight, renderBossResults, renderAdmin, renderVersus,
   renderTutorial, renderSummon, renderCollection, renderLoadout, goonCard, GOON_ICON,
-  initParticles,
+  initParticles, renderConnect, renderNetStatus,
 } from "./ui.js";
 
 const ADMIN_CODE = "JERKGOD";
@@ -51,6 +52,9 @@ const state = {
   micReady: false,
   pending: null,        // pending match config while on mic panel
   keyHandler: null,
+  net: null,            // active Net transport for online 1v1
+  serverUrl: localStorage.getItem("jm_server") || "",
+  online: null,         // { ranked } while an online match is being set up
 };
 
 // Apply saved sensitivity + sfx preference + theme
@@ -76,6 +80,8 @@ function navTo(screen) {
   if (state.bossFight) { state.bossFight.abort(); state.bossFight = null; }
   if (state.world8) { state.world8.destroy(); state.world8 = null; }
   if (state.versus) { state.versus.stop(); state.versus = null; }
+  // Tear down any online session unless we're mid-online-match (arena handles it).
+  if (state.net && screen !== "arena" && !state._netMatchActive) { closeNet(); }
   if (state.inputMode === "mic" && state.micReady) { state.clap.stop(); state.micReady = false; }
   detachKeyboard();
 
@@ -90,6 +96,7 @@ function navTo(screen) {
     case "collection":   app.innerHTML = renderCollection(state.profile); break;
     case "loadout":      app.innerHTML = renderLoadout(state.profile); wireLoadout(); break;
     case "world":        app.innerHTML = renderWorld(state.profile); wireWorld8Bit(); break;
+    case "connect":      app.innerHTML = renderConnect(state.profile, state.serverUrl); wireConnect(); break;
     case "admin":
       if (!state.profile.adminUnlocked) { navTo("lobby"); return; }
       app.innerHTML = renderAdmin(state.profile); wireAdmin(); break;
@@ -137,6 +144,10 @@ function buildConfig(mode, opts = {}) {
 function startMode(mode) {
   if (mode === "custom") { navTo("custom"); return; }
   if (mode === "versus") { startVersus(); return; }
+  // "Play Ranked" now leads with real-player matchmaking; the bot ranked
+  // match lives behind "Ranked vs bot" on the connect screen as a fallback.
+  if (mode === "ranked") { navTo("connect"); return; }
+  if (mode === "ranked-bot") { state.pending = buildConfig("ranked"); showMicPanel(); return; }
   state.pending = buildConfig(mode);
   showMicPanel();
 }
@@ -1146,6 +1157,205 @@ function showMicPanel() {
   syncMicPanelCamBtn();
 }
 
+// ===========================================================================
+// Online 1v1 (WebRTC) — friend copy-paste + server matchmaking
+// ===========================================================================
+function onlineConfig(ranked, foeName) {
+  return {
+    mode: ranked ? "ranked" : "duel",
+    label: ranked ? "RANKED · ONLINE 🌐" : "1v1 · ONLINE 🌐",
+    duration: 25,
+    ranked: !!ranked,
+    online: true,
+    bot: { name: foeName || "Opponent" },   // {name} only → clash UI, no local AI
+    hostRole: state.net ? state.net.role !== "guest" : true,
+  };
+}
+
+function closeNet() {
+  if (state.net) { try { state.net.close(); } catch {} }
+  state.net = null;
+  state.online = null;
+  state._netMatchActive = false;
+  state._netReady = state._peerReady = state._foeLeft = state._foeEnded = false;
+  state._foeName = null;
+}
+
+function newNet(ranked) {
+  closeNet();
+  const net = new Net();
+  state.net = net;
+  state.online = { ranked };
+  net.addEventListener("status", (e) => netStatus(e.detail || "Connecting…"));
+  net.addEventListener("neterror", (e) => { toast(e.detail || "Connection failed", "🚫"); clearNetStatus(); closeNet(); });
+  net.addEventListener("open", onNetOpen);
+  net.addEventListener("close", onNetClose);
+  net.addEventListener("msg", (e) => onNetMsg(e.detail));
+  return net;
+}
+
+function netStatus(msg, sub = "") {
+  let el = document.getElementById("net-status");
+  if (!el) {
+    document.body.insertAdjacentHTML("beforeend", renderNetStatus(msg, sub));
+    el = document.getElementById("net-status");
+    el.querySelector("#net-cancel").addEventListener("click", () => { clearNetStatus(); closeNet(); navTo("connect"); });
+  } else {
+    el.querySelector("#net-status-msg").textContent = msg;
+    el.querySelector("#net-status-sub").textContent = sub || "";
+  }
+}
+function clearNetStatus() { const el = document.getElementById("net-status"); if (el) el.remove(); }
+
+function onNetOpen() {
+  clearNetStatus();
+  state.net.send({ t: "hi", name: state.profile.name || "Player", rank: state.profile.rankIndex || 0 });
+  // Into the shared pre-match input setup; the ready handshake syncs the start.
+  state.pending = onlineConfig(state.online.ranked, state._foeName || state.net.peerName);
+  showMicPanel();
+}
+
+function onNetClose() {
+  if (state._netMatchActive && state.match && state.match.running) {
+    // Opponent bailed mid-match — award the win by forfeit.
+    state._foeLeft = true;
+    toast("Opponent left — you win by forfeit! 🏆", "🔌");
+    state.match.foePush = -1;
+    state.match._finish();
+    return;
+  }
+  if (!state._netMatchActive) {
+    toast("Opponent disconnected", "🔌");
+    clearNetStatus();
+    closeNet();
+    if (!document.querySelector(".arena")) navTo("connect");
+  }
+}
+
+function onNetMsg(m) {
+  if (!m || !m.t) return;
+  switch (m.t) {
+    case "hi":   state._foeName = m.name || "Opponent"; break;
+    case "ready": state._peerReady = true; maybeStartOnline(); break;
+    case "go":   if (state.net && state.net.role === "guest") beginOnlineMatch(); break;
+    case "c":    if (state.match) state.match.foeClap(m.s || 1, m.p); break;
+    case "end":  state._foeEnded = true; break;
+    case "bye":  onNetClose(); break;
+  }
+}
+
+function onlineReady() {
+  state._netReady = true;
+  if (state.net) state.net.send({ t: "ready" });
+  netStatus("You're ready ✓", "Waiting for your opponent…");
+  maybeStartOnline();
+}
+
+function maybeStartOnline() {
+  if (!state._netReady || !state._peerReady || !state.net) return;
+  if (state.net.role === "guest") return;      // guest waits for the host's "go"
+  state.net.send({ t: "go" });                 // host is authoritative
+  beginOnlineMatch();
+}
+
+function beginOnlineMatch() {
+  clearNetStatus();
+  state._netMatchActive = true;
+  state._foeEnded = state._foeLeft = false;
+  if (state.pending) {
+    state.pending.bot.name = state._foeName || (state.net && state.net.peerName) || "Opponent";
+    state.pending.hostRole = state.net ? state.net.role !== "guest" : true;
+  }
+  beginMatch();
+}
+
+function wireConnect() {
+  $$(".net-tab").forEach((t) => t.addEventListener("click", () => {
+    $$(".net-tab").forEach((x) => x.classList.remove("active"));
+    t.classList.add("active");
+    const which = t.dataset.nettab;
+    $$(".net-pane").forEach((p) => { p.style.display = p.dataset.pane === which ? "" : "none"; });
+  }));
+
+  // ---- Friend (copy-paste) — host ----
+  const createBtn = $("#net-create");
+  if (createBtn) createBtn.addEventListener("click", async () => {
+    if (!netSupported()) { toast("This browser can't do WebRTC 1v1", "🚫"); return; }
+    createBtn.disabled = true; createBtn.textContent = "Generating…";
+    const net = newNet(false);
+    try {
+      const code = await net.createOffer();
+      $("#host-out").style.display = "";
+      $("#host-code").value = code;
+      createBtn.textContent = "✓ Code ready — send it";
+    } catch { toast("Couldn't create a code (WebRTC blocked here?)", "🚫"); createBtn.disabled = false; createBtn.textContent = "Create connect code"; closeNet(); }
+  });
+  const hostCopy = $("#host-copy"); if (hostCopy) hostCopy.addEventListener("click", () => copyText($("#host-code").value));
+  const hostConnect = $("#host-connect");
+  if (hostConnect) hostConnect.addEventListener("click", async () => {
+    const ans = ($("#host-answer").value || "").trim();
+    if (!ans) { toast("Paste your friend's reply code first", "📋"); return; }
+    if (!state.net) { toast("Create a code first", "①"); return; }
+    netStatus("Connecting…", "Linking to your friend");
+    try { await state.net.acceptAnswer(ans); } catch { toast("That reply code didn't work", "🚫"); clearNetStatus(); }
+  });
+
+  // ---- Friend (copy-paste) — join ----
+  const joinBtn = $("#net-join");
+  if (joinBtn) joinBtn.addEventListener("click", async () => {
+    if (!netSupported()) { toast("This browser can't do WebRTC 1v1", "🚫"); return; }
+    const offer = ($("#join-offer").value || "").trim();
+    if (!offer) { toast("Paste your friend's code first", "📋"); return; }
+    joinBtn.disabled = true; joinBtn.textContent = "Generating…";
+    const net = newNet(false);
+    try {
+      const reply = await net.acceptOffer(offer);
+      $("#join-out").style.display = "";
+      $("#join-code").value = reply;
+      joinBtn.textContent = "✓ Reply ready — send it back";
+      netStatus("Waiting for your friend…", "The match starts when they connect");
+    } catch { toast("That code didn't work", "🚫"); joinBtn.disabled = false; joinBtn.textContent = "Generate reply →"; closeNet(); }
+  });
+  const joinCopy = $("#join-copy"); if (joinCopy) joinCopy.addEventListener("click", () => copyText($("#join-code").value));
+
+  // ---- Ranked / server ----
+  const server = $("#net-server");
+  const saveServer = () => { if (server) { state.serverUrl = server.value.trim(); localStorage.setItem("jm_server", state.serverUrl); } };
+  const quick = $("#net-quick");
+  if (quick) quick.addEventListener("click", () => {
+    saveServer();
+    if (!state.serverUrl) { toast("Enter a matchmaking server URL first", "🌐"); return; }
+    startServerMatch("queue", { ranked: true });
+  });
+  const roomToggle = $("#net-room");
+  if (roomToggle) roomToggle.addEventListener("click", () => { const w = $("#net-room-wrap"); w.style.display = w.style.display === "none" ? "" : "none"; });
+  const roomHost = $("#net-room-host");
+  if (roomHost) roomHost.addEventListener("click", () => {
+    saveServer(); const room = ($("#net-roomcode").value || "").trim();
+    if (!state.serverUrl || !room) { toast("Server URL + room code needed", "🔑"); return; }
+    startServerMatch("host", { ranked: false, room });
+  });
+  const roomJoin = $("#net-room-join");
+  if (roomJoin) roomJoin.addEventListener("click", () => {
+    saveServer(); const room = ($("#net-roomcode").value || "").trim();
+    if (!state.serverUrl || !room) { toast("Server URL + room code needed", "🔑"); return; }
+    startServerMatch("join", { ranked: false, room });
+  });
+}
+
+function startServerMatch(mode, { ranked, room = "" }) {
+  if (!netSupported()) { toast("This browser can't do WebRTC 1v1", "🚫"); return; }
+  const net = newNet(ranked);
+  netStatus(mode === "queue" ? "Searching for an opponent…" : "Connecting to room…", "");
+  net.connectServer(state.serverUrl, { mode, room, rank: state.profile.rankIndex || 0, name: state.profile.name || "Player" });
+}
+
+function copyText(t) {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(t).then(() => toast("Copied!", "📋"), () => toast("Copy failed — select the text and copy manually", "📋"));
+  } else { toast("Select the text and copy manually", "📋"); }
+}
+
 // ---------------------------------------------------------------------------
 // Keyboard / touch input
 // ---------------------------------------------------------------------------
@@ -1198,6 +1408,9 @@ function touchAllowed(cfg) {
 
 // Route the pending config to the right game type.
 function startPending() {
+  // Online: finishing input setup marks you READY; the match begins once both
+  // players are ready (synchronised by the host).
+  if (state.pending && state.pending.online) { onlineReady(); return; }
   if (state.pending && state.pending.mode === "boss") beginBossFight();
   else beginMatch();
 }
@@ -1217,6 +1430,12 @@ function beginMatch() {
       // Practice: finish gracefully into the results screen.
       state.match.end();
       return;
+    }
+    if (cfg.online) {
+      // Forfeit an online match: tell the opponent, then bail.
+      if (state.net) state.net.send({ t: "bye" });
+      state._netMatchActive = false;
+      closeNet();
     }
     if (state.match) state.match.abort();
     cleanupInputs();
@@ -1317,6 +1536,8 @@ function wireMatchEvents(match, cfg) {
       clearTimeout(state._camPulse);
       state._camPulse = setTimeout(() => camWindow.classList.remove("pulse"), 130);
     }
+    // Online: relay every clap (with the exact bar push) so both peers agree.
+    if (cfg.online && state.net) state.net.send({ t: "c", s: strength, p: e.detail.push });
   });
 
   let susWarned = false;
@@ -1382,6 +1603,29 @@ function wireMatchEvents(match, cfg) {
   match.addEventListener("end", (result) => {
     cleanupInputs();
     const r = result.detail;
+
+    // Online: let late claps cross the wire, then decide from synced totals so
+    // both peers agree on the winner.
+    if (cfg.online) {
+      if (state.net) state.net.send({ t: "end" });
+      const finalize = () => {
+        const m = state.match;
+        if (m) {
+          r.won = state._foeLeft ? true : m.onlineVerdict() === 1;
+          const tot = m.youPush + m.foePush || 1;
+          r.margin = Math.round(Math.abs(m.youPush - m.foePush) / tot * 100);
+          r.youBar = Math.round((m.youPush / tot) * 100);
+          r.foeBar = 100 - r.youBar;
+        }
+        r.knockout = false;
+        state._netMatchActive = false;
+        finishMatch(r);
+        closeNet();
+      };
+      state._foeLeft ? finalize() : setTimeout(finalize, 650);
+      return;
+    }
+
     if (r.knockout) {
       state.sfx.knockout();
       app.classList.add("shake");

@@ -195,6 +195,13 @@ export function renderLobby(profile) {
         <p>Real 1v1 on one device. Left player mashes <b>A</b>, right player mashes <b>L</b> — first to knock the other out wins.</p>
         <div class="mc-go">Local battle <span class="arrow">→</span></div>
       </div>
+      <div class="mode-card" style="--mc:rgba(255,77,120,0.34)" data-nav="connect">
+        <span class="mc-tag">vs Real People 🌐</span>
+        <div class="mc-icon">🌍</div>
+        <h3>Online 1v1</h3>
+        <p>Battle a real person over the internet — clap live head-to-head. Play a friend with a connect code, or Quick Match a stranger for Ranked RR.</p>
+        <div class="mc-go">Go online <span class="arrow">→</span></div>
+      </div>
       <div class="mode-card practice" data-play="practice">
         <span class="mc-tag">Free play</span>
         <div class="mc-icon">🎯</div>
@@ -602,9 +609,9 @@ export function renderArena(cfg, profile) {
             </div>
           </div>
           <div class="clash-head foe">
-            <span class="ch-av">🤖</span>
+            <span class="ch-av">${cfg.online ? "🌐" : "🤖"}</span>
             <div>
-              <div class="ch-name">${cfg.bot.name}</div>
+              <div class="ch-name">${escapeHtml(cfg.bot.name)}</div>
               <div class="ch-cps"><b id="foe-cps">0</b> cps</div>
             </div>
           </div>
@@ -1027,6 +1034,94 @@ export function renderVersus(profile) {
 
     <div class="center mt-24"><button class="btn ghost" id="arena-quit">Quit</button></div>
   </section>`;
+}
+
+// ---- Online 1v1 connect ----------------------------------------------------
+export function renderConnect(profile, serverUrl = "") {
+  return `
+  <section class="screen connect">
+    <div class="section-title"><h2>🌐 Online 1v1</h2><span class="sub">clap a real person over the internet</span></div>
+
+    <div class="net-tabs">
+      <button class="net-tab active" data-nettab="friend">👥 Play a Friend</button>
+      <button class="net-tab" data-nettab="ranked">🏆 Quick Match / Ranked</button>
+    </div>
+
+    <!-- FRIEND: copy-paste WebRTC, no server needed -->
+    <div class="net-pane" data-pane="friend">
+      <p class="net-lead">Trade a one-time connect code with a friend (Discord, text, anywhere) and you'll clap head-to-head. Casual — no rank on the line.</p>
+      <div class="net-two">
+        <div class="net-box">
+          <h3>① Host the battle</h3>
+          <p>Create a code, send it to your friend, then paste their reply.</p>
+          <button class="btn cyan" id="net-create">Create connect code</button>
+          <div class="net-code-wrap" id="host-out" style="display:none">
+            <label>Your code — send this to your friend:</label>
+            <textarea class="net-code" id="host-code" readonly></textarea>
+            <button class="btn ghost sm" id="host-copy">📋 Copy code</button>
+            <label style="margin-top:12px">Paste your friend's reply code:</label>
+            <textarea class="net-code" id="host-answer" placeholder="Paste the reply code here…"></textarea>
+            <button class="btn" id="host-connect">Connect →</button>
+          </div>
+        </div>
+        <div class="net-box">
+          <h3>② Join a battle</h3>
+          <p>Got a code from a friend? Paste it, then send back your reply.</p>
+          <textarea class="net-code" id="join-offer" placeholder="Paste your friend's code here…"></textarea>
+          <button class="btn cyan" id="net-join">Generate reply →</button>
+          <div class="net-code-wrap" id="join-out" style="display:none">
+            <label>Send this reply code back to your friend:</label>
+            <textarea class="net-code" id="join-code" readonly></textarea>
+            <button class="btn ghost sm" id="join-copy">📋 Copy reply</button>
+            <p class="net-hint">Then wait — the match starts automatically once they connect.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RANKED: needs a signaling server -->
+    <div class="net-pane" data-pane="ranked" style="display:none">
+      <p class="net-lead">Quick Match pairs you with another real player for a <b>Ranked</b> battle that moves your RR. This needs a tiny (free) matchmaking server — paste its address below.</p>
+      <div class="net-box">
+        <label>Matchmaking server URL</label>
+        <input class="text-input" id="net-server" placeholder="wss://your-server.example.com" value="${escapeHtml(serverUrl)}" />
+        <p class="net-hint">Don't have one? It's a ~40-line file — see <code>server/README.md</code> in the project for 1-click deploy steps. Then paste the <code>wss://</code> URL here.</p>
+        <div class="row" style="margin-top:14px">
+          <button class="btn cyan" id="net-quick">🏆 Find Ranked Match</button>
+          <button class="btn ghost" id="net-room">🔑 Private room…</button>
+        </div>
+        <div id="net-room-wrap" style="display:none;margin-top:12px">
+          <label>Room code (share with one friend)</label>
+          <div class="row">
+            <input class="text-input" id="net-roomcode" placeholder="e.g. JERK42" maxlength="12" />
+            <button class="btn" id="net-room-host">Host</button>
+            <button class="btn ghost" id="net-room-join">Join</button>
+          </div>
+          <p class="net-hint">Private rooms are casual (no RR) — a smoother way to play a friend than trading codes.</p>
+        </div>
+      </div>
+      <div class="net-box net-fallback">
+        <h3>No server yet?</h3>
+        <p>You can still play Ranked against a rank-scaled bot to move your RR.</p>
+        <button class="btn ghost" data-play="ranked-bot">🤖 Ranked vs bot</button>
+      </div>
+    </div>
+
+    <div class="center mt-24"><button class="btn ghost" data-nav="lobby">← Back</button></div>
+  </section>`;
+}
+
+// A modal-style "connecting / waiting" overlay used during online setup.
+export function renderNetStatus(msg, sub = "") {
+  return `
+  <div class="net-status-back" id="net-status">
+    <div class="net-status">
+      <div class="net-spinner"></div>
+      <div class="net-status-msg" id="net-status-msg">${escapeHtml(msg)}</div>
+      <div class="net-status-sub" id="net-status-sub">${escapeHtml(sub)}</div>
+      <button class="btn ghost sm" id="net-cancel">Cancel</button>
+    </div>
+  </div>`;
 }
 
 // ---- Admin panel (window) --------------------------------------------------

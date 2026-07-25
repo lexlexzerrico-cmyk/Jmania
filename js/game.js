@@ -44,6 +44,7 @@ export class Match extends EventTarget {
     super();
     this.cfg = cfg;
     this.endless = !!cfg.endless;   // practice: no timer, ends on demand
+    this.online = !!cfg.online;     // real remote opponent (foe driven by the network)
     this.duration = cfg.duration;
     this.startAt = 0;
     this.endAt = 0;
@@ -72,6 +73,11 @@ export class Match extends EventTarget {
     // 50 = dead even, 100 = player knockout, 0 = foe knockout.
     this.tug = 50;
     this.knockout = 0;       // 0 none, 1 player won, -1 foe won
+    // Online 1v1 is decided by cumulative push (order-independent, so both
+    // peers agree once every clap has crossed the reliable channel).
+    this.youPush = 0;
+    this.foePush = 0;
+    this.hostRole = cfg.hostRole !== false; // tie-breaker: host wins exact ties
 
     // ---- live events: burst windows, silence hazards, perfect pulses ----
     this.activeEvent = null;      // null | "burst" | "silence"
@@ -94,7 +100,7 @@ export class Match extends EventTarget {
     };
 
     // Live events only in solo timed modes (keeps 1v1 clean).
-    if (!this.endless && !this.bot && this.duration >= 15) this._planEvents();
+    if (!this.endless && !this.bot && !this.online && this.duration >= 15) this._planEvents();
   }
 
   _addGoon(id, pts) {
@@ -175,12 +181,13 @@ export class Match extends EventTarget {
     this.startAt = performance.now();
     this.endAt = this.startAt + this.duration * 1000;
     this._loop();
-    if (this.bot) this._scheduleBot();
+    if (this.bot && !this.online) this._scheduleBot();
   }
 
   registerClap(strength = 1) {
     if (!this.running) return;
     const now = performance.now();
+    this._lastPush = 0;   // push this clap applied to the clash bar (0 = solo)
 
     // Anti-autoclicker: inputs beyond a humanly-possible rate are ignored.
     if (this._cps(now) >= MAX_LEGIT_CPS) {
@@ -243,13 +250,18 @@ export class Match extends EventTarget {
 
     // 1v1 clash: shove the lightning bar toward the opponent.
     if (this.bot) {
-      this.tug = Math.min(100, this.tug + pushFor(this.combo, strength));
+      const push = pushFor(this.combo, strength);
+      this._lastPush = push;   // relayed to the peer so both agree on the bar
+      this.youPush += push;
+      this.tug = Math.min(100, this.tug + push);
       this.dispatchEvent(new CustomEvent("clash", { detail: { tug: this.tug, by: "you", strength } }));
-      if (this.tug >= 100) { this.knockout = 1; return this._finish(); }
+      // Online is decided by push totals at time-out (no early KO, so both
+      // peers stay in sync); the local bot keeps its instant-KO drama.
+      if (!this.online && this.tug >= 100) { this.knockout = 1; return this._finish(); }
     }
 
     this.dispatchEvent(new CustomEvent("clap", {
-      detail: { pts, score: this.score, combo: this.combo, mult: this.mult, strength },
+      detail: { pts, score: this.score, combo: this.combo, mult: this.mult, strength, push: this._lastPush },
     }));
   }
 
@@ -359,6 +371,34 @@ export class Match extends EventTarget {
     if (this.tug <= 0) { this.knockout = -1; this._finish(); }
   }
 
+  // A clap from the REAL remote opponent arrived over the network. Mirrors
+  // _botClap but is fed by net messages. Keeps counting for a short grace even
+  // after the match ends, so late-arriving claps still count toward the total.
+  foeClap(strength = 1, push = null) {
+    const now = performance.now();
+    this._foeCombo = (this._foeCombo || 0) + 1;
+    // Use the exact push the sender applied (relayed over the net) so both
+    // peers' bars and verdicts stay identical; fall back to a local estimate.
+    const p = (push != null && isFinite(push)) ? push : pushFor(this._foeCombo, strength);
+    this.foePush += p;
+    this.botClaps += 1;
+    this.botClapTimes.push(now);
+    const mult = comboToMult(this._foeCombo);
+    this.botScore += Math.round(BASE_POINTS * mult * 0.9);
+    if (!this.running) return;   // still tallied above; just no live bar move
+    this.tug = Math.max(0, this.tug - p);
+    this.dispatchEvent(new CustomEvent("clash", { detail: { tug: this.tug, by: "foe", strength } }));
+  }
+
+  // Decide the online winner from the synced push totals (called after the
+  // reconciliation grace so both peers have every clap).
+  onlineVerdict() {
+    if (this.youPush > this.foePush) return 1;
+    if (this.youPush < this.foePush) return -1;
+    if (this.totalClaps !== this.botClaps) return this.totalClaps > this.botClaps ? 1 : -1;
+    return this.hostRole ? 1 : -1;
+  }
+
   _finish() {
     if (!this.running) return;
     this.running = false;
@@ -387,9 +427,14 @@ export class Match extends EventTarget {
     }
 
     // 1v1 is decided by the clash bar (knockout, or who owns more of it at
-    // time-out). Solo modes always "win" (it's a high-score run).
+    // time-out). Online uses synced push totals so both peers agree. Solo
+    // modes always "win" (it's a high-score run).
     let won, margin;
-    if (this.bot) {
+    if (this.online) {
+      won = this.onlineVerdict() === 1;
+      const total = this.youPush + this.foePush || 1;
+      margin = Math.round(Math.abs(this.youPush - this.foePush) / total * 100); // 0..100
+    } else if (this.bot) {
       won = this.knockout ? this.knockout === 1 : this.tug >= 50;
       margin = Math.abs(this.tug - (100 - this.tug)); // 0..100 bar dominance
     } else {
@@ -406,7 +451,8 @@ export class Match extends EventTarget {
       peakCps: this.peakCps,
       peakCombo: this.peakCombo,
       duration: this.endless ? Math.round((performance.now() - this.startAt) / 1000) : this.duration,
-      hasOpponent: !!this.bot,
+      hasOpponent: !!this.bot || this.online,
+      online: this.online,
       botScore: this.botScore,
       botName: this.bot ? this.bot.name : null,
       won,

@@ -866,6 +866,34 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .vs-key.hit { transform: scale(0.94); box-shadow: 0 0 30px rgba(255,255,255,0.6), inset 0 0 20px rgba(255,255,255,0.4); }
 .vs-key:active { transform: scale(0.94); }
 
+/* ---- Online 1v1 connect screen ---- */
+.connect { max-width: 860px; margin: 0 auto; }
+.net-tabs { display: flex; gap: 8px; margin: 6px 0 18px; }
+.net-tab { flex: 1; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--stroke); background: rgba(255,255,255,0.03); color: var(--text-dim); font-family: var(--font-display); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.net-tab.active { border-color: #ff4d78; color: #fff; background: rgba(255,77,120,0.12); box-shadow: 0 0 18px -6px rgba(255,77,120,0.6); }
+.net-lead { color: var(--text-dim); font-size: 14px; line-height: 1.5; margin-bottom: 16px; }
+.net-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .net-two { grid-template-columns: 1fr; } }
+.net-box { padding: 18px; border-radius: var(--r-lg); background: var(--panel); border: 1px solid var(--stroke); }
+.net-box h3 { font-family: var(--font-display); font-size: 15px; margin-bottom: 6px; }
+.net-box > p { color: var(--text-faint); font-size: 12.5px; line-height: 1.5; margin-bottom: 12px; }
+.net-box label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); margin: 10px 0 5px; }
+.net-code { width: 100%; min-height: 62px; resize: vertical; border-radius: var(--r-md); border: 1px solid var(--stroke); background: rgba(0,0,0,0.28); color: var(--text); font-family: monospace; font-size: 11px; padding: 8px 10px; word-break: break-all; }
+.net-code-wrap { margin-top: 12px; }
+.btn.sm { padding: 7px 12px; font-size: 12px; margin-top: 6px; }
+.net-hint { font-size: 11.5px; color: var(--text-faint); line-height: 1.5; margin-top: 8px; }
+.net-hint code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+.net-fallback { margin-top: 16px; border-style: dashed; }
+.net-box .btn { margin-top: 8px; }
+
+/* ---- Online connecting overlay ---- */
+.net-status-back { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(6,4,16,0.82); backdrop-filter: blur(6px); }
+.net-status { text-align: center; padding: 32px 40px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); box-shadow: var(--shadow); max-width: 90vw; }
+.net-spinner { width: 44px; height: 44px; margin: 0 auto 18px; border-radius: 50%; border: 4px solid rgba(255,77,120,0.25); border-top-color: #ff4d78; animation: netSpin 0.9s linear infinite; }
+@keyframes netSpin { to { transform: rotate(360deg); } }
+.net-status-msg { font-family: var(--font-display); font-size: 17px; margin-bottom: 6px; }
+.net-status-sub { color: var(--text-faint); font-size: 13px; margin-bottom: 18px; min-height: 16px; }
+
 /* ============================================================
    8-bit overworld
    ============================================================ */

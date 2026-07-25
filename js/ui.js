@@ -442,6 +442,7 @@ export const ART_SLOTS = [
 ];
 
 function renderCustomArt(profile) {
+  if (!profile.adminUnlocked) return "";   // admin-only feature
   const art = profile.customArt || {};
   const rows = ART_SLOTS.map((slot) => {
     const has = !!art[slot.id];

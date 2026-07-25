@@ -32,6 +32,14 @@ export const EFFECTS = [
   { id: "chakra",   name: "Nine-Tailed Cloak", price: 2800, rarity: "legendary", kind: "chakra",    sfx: "roar",    colors: ["#ff9f3a", "#ffd05a", "#ff5b2d"], desc: "A burning chakra cloak erupts around you — nine tails of fire whip outward." },
   { id: "bankai",   name: "Crimson Bankai",    price: 1800, rarity: "legendary", kind: "bankai",    sfx: "hslash",  colors: ["#ff1f3d", "#8f0f22", "#000000"], desc: "A colossal black-red crescent wave tears across the whole screen." },
   { id: "domain",   name: "Domain Expansion",  price: 3200, rarity: "legendary", kind: "domain",    sfx: "gong",    colors: ["#b14dff", "#3d1a66", "#e8d8ff"], desc: "Reality inverts — an expanding rune circle swallows the arena.", screenFlash: "rgba(60,10,90,0.18)" },
+  // ---- BOSS DROPS: unbuyable, only earned by beating a JerkWorld boss ----
+  { id: "bfx_kaiju",     name: "Kaiju Stomp",       price: 0, rarity: "boss", kind: "bomb",    sfx: "boom",  colors: ["#7CFC00", "#ffd05a", "#3a5f1a"], boss: "Clapzilla",     desc: "BOSS DROP — Clapzilla's radioactive stomp levels the block.", screenFlash: "rgba(120,255,40,0.12)" },
+  { id: "bfx_overclock", name: "Overclock",         price: 0, rarity: "boss", kind: "glyph",   sfx: "zap",   colors: ["#ff2d5a", "#ff8f3a", "#ffffff"], boss: "Jerkinator 3000", desc: "BOSS DROP — Jerkinator's red error-code rain floods the screen." },
+  { id: "bfx_frostgear", name: "Frostgear",         price: 0, rarity: "boss", kind: "frost",   sfx: "ice",   colors: ["#bffcff", "#6ad0ff", "#dff8ff"], boss: "Mecha-Mittens", desc: "BOSS DROP — Mecha-Mittens' cryo-piston shatters the air.", screenFlash: "rgba(150,230,255,0.10)" },
+  { id: "bfx_tempest",   name: "Tempest Fury",      price: 0, rarity: "boss", kind: "thunder", sfx: "zap",   colors: ["#c9b8ff", "#ffffff", "#7fb0ff"], boss: "Thunder Jerk",  desc: "BOSS DROP — Thunder Jerk's violet storm-bolt splits the sky.", screenFlash: "rgba(200,180,255,0.16)" },
+  { id: "bfx_kaijusoul", name: "Kaiju Soul",        price: 0, rarity: "boss", kind: "chakra",  sfx: "roar",  colors: ["#7CFC00", "#ffd05a", "#ff5b2d"], boss: "Jerkzilla",     desc: "BOSS DROP — the burning spirit of Jerkzilla the Kaiju King erupts around you." },
+  { id: "bfx_grandpalm", name: "Grand Domain",      price: 0, rarity: "boss", kind: "domain",  sfx: "gong",  colors: ["#ffd05a", "#b14dff", "#fff3c4"], boss: "Jerkmaster",    desc: "BOSS DROP — the Grandmaster's golden domain swallows the arena.", screenFlash: "rgba(90,50,20,0.16)" },
+  { id: "bfx_jerkgod",   name: "JERKGOD DOMAIN",    price: 0, rarity: "boss", kind: "galaxy",  sfx: "shimmer", colors: ["#ffe79a", "#ffd05a", "#fff", "#ffb03a"], boss: "OMEGA JERKGOD", desc: "BOSS DROP — the final god's golden galaxy is born from your palms. The rarest effect in the game." },
   { id: "dev",      name: "Developer",         price: 0,    rarity: "admin",     kind: "glyph",     sfx: "sparkle", colors: ["#3ee08a", "#a6ff3a", "#0a3"],    desc: "Matrix glyph rain. Admin only." },
   { id: "susanoo",  name: "Spectral Guardian", price: 0,    rarity: "admin",     kind: "spark",     sfx: "vboom",   colors: ["#7fb0ff", "#b14dff", "#22e0d6"], guardian: true, desc: "A colossal armored spirit warrior materializes and SWINGS its blade on big combos. Admin only." },
 ];
@@ -39,7 +47,7 @@ export const EFFECTS = [
 export function effectById(id) { return EFFECTS.find((e) => e.id === id) || EFFECTS[0]; }
 export const RARITY_COLOR = {
   free: "#8a90a0", rare: "#4d9cff", epic: "#b14dff",
-  legendary: "#ffd05a", premium: "#ff3d9f", admin: "#3ee08a",
+  legendary: "#ffd05a", premium: "#ff3d9f", admin: "#3ee08a", boss: "#ff4d4d",
 };
 
 const GLYPHS = "アカサタナハマヤラ0123456789JC";

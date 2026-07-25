@@ -810,15 +810,16 @@ export function renderShop(profile) {
     if (equipped) action = `<button class="btn ghost" disabled>✓ Equipped</button>`;
     else if (isOwned) action = `<button class="btn cyan" data-equip="${a.id}">Equip</button>`;
     else if (a.rarity === "admin") action = `<button class="btn ghost" disabled>🛠️ Admin</button>`;
+    else if (a.rarity === "boss") action = `<button class="btn ghost" disabled>🗡️ Beat ${escapeHtml(a.boss || "the boss")}</button>`;
     else if (locked) action = `<button class="btn ghost" disabled>★ Premium only</button>`;
     else action = `<button class="btn" data-buy="${a.id}">${jcBadge(16)} ${a.price.toLocaleString()}</button>`;
     return `
-      <div class="aura-card ${equipped ? "equipped" : ""}" style="--rc:${rc}" data-try="${a.id}">
+      <div class="aura-card ${equipped ? "equipped" : ""} ${a.rarity === "boss" && !isOwned ? "locked-drop" : ""}" style="--rc:${rc}" data-try="${a.id}">
         <div class="aura-swatch" style="background:${swatch}">
           <span class="aura-rarity" style="background:${rc}22;color:${rc};border-color:${rc}66">${a.rarity}</span>
           <button class="aura-preview" data-try="${a.id}" title="Preview effect">▶ test</button>
         </div>
-        <div class="aura-name">${a.name}${a.rarity === "premium" ? " ★" : ""}${a.rarity === "admin" ? " 🛠️" : ""}</div>
+        <div class="aura-name">${a.name}${a.rarity === "premium" ? " ★" : ""}${a.rarity === "admin" ? " 🛠️" : ""}${a.rarity === "boss" ? " 🗡️" : ""}</div>
         <div class="aura-desc">${a.desc}</div>
         <div class="aura-action">${action}</div>
       </div>`;
@@ -937,8 +938,16 @@ export function renderBossFight(boss, profile) {
 }
 
 // ---- Boss results ----------------------------------------------------------
-export function renderBossResults(r, jcReport, xpGained, isNewKill) {
+export function renderBossResults(r, jcReport, xpGained, isNewKill, drops = {}) {
   const b = r.boss;
+  const dropTitle = drops.title, dropEffect = drops.effect;
+  const hasLoot = dropTitle || dropEffect;
+  const lootHtml = hasLoot ? `
+      <div class="boss-loot">
+        <div class="boss-loot-hd">🎁 BOSS DROP${dropTitle && dropEffect ? "S" : ""} — you claimed the mantle</div>
+        ${dropTitle ? `<div class="boss-loot-row"><span class="ll">Title</span>${titleChip(dropTitle)}</div>` : ""}
+        ${dropEffect ? `<div class="boss-loot-row"><span class="ll">Effect</span><span class="loot-eff" style="--rc:${RARITY_COLOR[dropEffect.rarity] || "#ff4d4d"}">${escapeHtml(dropEffect.name)} <em>· unbuyable</em></span></div>` : ""}
+      </div>` : "";
   return `
   <section class="screen results">
     <div class="res-card">
@@ -967,6 +976,7 @@ export function renderBossResults(r, jcReport, xpGained, isNewKill) {
           <span class="r-delta up">+${xpGained}</span>
         </div>` : ""}
       </div>
+      ${lootHtml}
 
       <div class="row" style="justify-content:center">
         ${r.won

@@ -825,6 +825,7 @@ function finishBossFight(r, bossIndex) {
   let jcReport = null;
   let xpGained = 0;
   let isNewKill = false;
+  const drops = { title: null, effect: null };   // unique first-kill drops for the results screen
   const prevLevel = levelFromXp(state.profile.xp);
 
   if (r.won) {
@@ -832,7 +833,19 @@ function finishBossFight(r, bossIndex) {
     app.classList.add("shake");
     setTimeout(() => app.classList.remove("shake"), 500);
     isNewKill = bossIndex === (state.profile.rpgBeaten || 0);
-    if (isNewKill) state.profile.rpgBeaten = bossIndex + 1;
+    if (isNewKill) {
+      state.profile.rpgBeaten = bossIndex + 1;
+      // Claim the boss's mantle (title) + any unbuyable effect drop.
+      if (r.boss.dropTitle && !(state.profile.titles || []).includes(r.boss.dropTitle)) {
+        grantTitle(state.profile, r.boss.dropTitle);
+        drops.title = titleById(r.boss.dropTitle);
+      }
+      if (r.boss.dropEffect && !(state.profile.ownedAuras || []).includes(r.boss.dropEffect)) {
+        if (!Array.isArray(state.profile.ownedAuras)) state.profile.ownedAuras = ["none"];
+        state.profile.ownedAuras.push(r.boss.dropEffect);
+        drops.effect = effectById(r.boss.dropEffect);
+      }
+    }
     // Rematches pay 40% to keep farming honest.
     const rewardJc = isNewKill ? r.boss.rewardJc : Math.round(r.boss.rewardJc * 0.4);
     jcReport = earnJc(state.profile, { score: 0, totalClaps: r.totalClaps, won: true }, rewardJc);
@@ -851,7 +864,7 @@ function finishBossFight(r, bossIndex) {
   checkTitleUnlocks(prevLevel);
   saveProfile(state.profile);
 
-  app.innerHTML = renderBossResults(r, jcReport, xpGained, isNewKill);
+  app.innerHTML = renderBossResults(r, jcReport, xpGained, isNewKill, drops);
   refreshHud();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }

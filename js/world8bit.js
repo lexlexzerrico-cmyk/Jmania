@@ -33,7 +33,8 @@ const SOLID = new Set([2, 3, 4, 8, 9, 11, 12]); // door(10)/sign(13)/tallgrass(7
 // Boss node positions along the route (tile coords), in fight order.
 export const BOSS_SPOTS = [
   { x: 22, y: 11 }, { x: 15, y: 15 }, { x: 28, y: 17 }, { x: 20, y: 22 },
-  { x: 30, y: 26 }, { x: 14, y: 30 }, { x: 24, y: 34 }, { x: 33, y: 38 },
+  { x: 31, y: 24 }, { x: 14, y: 27 }, { x: 25, y: 29 }, { x: 34, y: 31 },
+  { x: 18, y: 34 }, { x: 30, y: 36 }, { x: 12, y: 38 }, { x: 24, y: 40 },
 ];
 
 function hpath(m, x0, x1, y, w = 1) { // horizontal path band

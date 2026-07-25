@@ -20,6 +20,19 @@ export const TITLES = [
   { id: "jowy",      name: "JOWY",              cls: "t-jowy",    how: "??? (secret code)",         type: "secret", flies: true },
   { id: "tester",    name: "TESTER",            cls: "t-tester",  how: "Granted by the developer",  type: "admin" },
   { id: "developer", name: "DEVELOPER",         cls: "t-dev",     how: "Granted by the developer",  type: "admin" },
+  // Boss-defeat titles — you claim the mantle of each boss you beat (JerkWorld).
+  { id: "bt_jerkling",    name: "Wannabe Crusher",   cls: "t-boss", how: "Defeat Jerkling",        type: "boss" },
+  { id: "bt_slapsalot",   name: "Knight-Ender",      cls: "t-boss", how: "Defeat Sir Slapsalot",   type: "boss" },
+  { id: "bt_clapzilla",   name: "City Savior",       cls: "t-boss", how: "Defeat Clapzilla",       type: "boss" },
+  { id: "bt_djjerk",      name: "Beat Breaker",      cls: "t-boss", how: "Defeat DJ Jerkbeat",     type: "boss" },
+  { id: "bt_palmfather",  name: "Made Clapper",      cls: "t-boss", how: "Defeat The Palmfather",  type: "boss" },
+  { id: "bt_jerkinator",  name: "Machine Slayer",    cls: "t-boss", how: "Defeat Jerkinator 3000", type: "boss" },
+  { id: "bt_mechamittens", name: "Mitten Melter",    cls: "t-boss", how: "Defeat Mecha-Mittens",   type: "boss" },
+  { id: "bt_thunderjerk", name: "Storm Ender",       cls: "t-boss", how: "Defeat Thunder Jerk",    type: "boss" },
+  { id: "bt_jerkzilla",   name: "Kaiju Hunter",      cls: "t-bossgold", how: "Defeat Jerkzilla",   type: "boss" },
+  { id: "bt_countess",    name: "Court Silencer",    cls: "t-boss", how: "Defeat Countess Applause", type: "boss" },
+  { id: "bt_jerkmaster",  name: "GRANDMASTER",       cls: "t-bossgold", how: "Defeat Jerkmaster",  type: "boss" },
+  { id: "bt_omega",       name: "JERKGOD",           cls: "t-bossgold", how: "Defeat OMEGA JERKGOD", type: "boss" },
 ];
 
 export function titleById(id) { return TITLES.find((t) => t.id === id) || null; }

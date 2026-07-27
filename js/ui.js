@@ -535,6 +535,15 @@ export function renderSettings(profile) {
         <button class="btn ghost" id="reset-btn" style="border-color:var(--bad);color:var(--bad);margin-top:10px">🗑️ Reset all progress</button>
       </div>
 
+      <div class="profile-row">
+        <div class="set-label">Profile</div>
+        <div class="profile-line">
+          <span class="profile-who">${profile.settings?.avatar || "🫵"} <b>${escapeHtml(profile.name || "Player")}</b></span>
+          <button class="btn ghost sm" id="switch-profile">🔁 Switch / Log out</button>
+        </div>
+        <div class="set-sub">Progress saves to this profile on this device.</div>
+      </div>
+
       <div class="center" style="margin-top:18px">
         <button class="btn ghost" id="admin-access" style="font-size:12px;opacity:0.6">🛠️ Developer access</button>
       </div>
@@ -1041,6 +1050,33 @@ export function renderVersus(profile) {
     </div>
 
     <div class="center mt-24"><button class="btn ghost" id="arena-quit">Quit</button></div>
+  </section>`;
+}
+
+// ---- Login / profile picker ------------------------------------------------
+export function renderLogin(users) {
+  return `
+  <section class="screen login-screen">
+    <div class="login-card">
+      <div class="login-logo">👏 JERKMANIA</div>
+      <div class="login-sub">Pick your profile — your progress saves to it.</div>
+      ${users.length ? `
+      <div class="login-list">
+        ${users.map((u) => `
+          <button class="login-user" data-user="${escapeHtml(u.name)}">
+            <span class="lu-av">${u.avatar || "🫵"}</span>
+            <span class="lu-name">${escapeHtml(u.name)}</span>
+            ${u.hasPin ? `<span class="lu-lock">🔒</span>` : ""}
+          </button>`).join("")}
+      </div>
+      <div class="login-or">— or create a new profile —</div>` : ""}
+      <div class="login-new">
+        <input class="text-input" id="login-name" placeholder="Profile name" maxlength="16" autocomplete="off" />
+        <input class="text-input" id="login-pin" placeholder="4-digit PIN (optional)" maxlength="4" inputmode="numeric" autocomplete="off" />
+        <button class="btn cyan big" id="login-create">Create &amp; Play →</button>
+      </div>
+      <div class="login-note">💾 Saved on <b>this device</b>. Move a save with <b>Settings → Export/Import</b>. True cross-device cloud login needs a server — ask and I'll add one.</div>
+    </div>
   </section>`;
 }
 

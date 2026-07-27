@@ -106,31 +106,114 @@ function migrate(p) {
   return p;
 }
 
+// ============================================================
+// Accounts / login — multiple named profiles saved on THIS device.
+// (There's no backend, so this is local; use Export/Import to move a save
+// to another device. A real cross-device login would need a server.)
+// ============================================================
+const USERS_KEY = "jerkmania.users.v1";   // { [key]: { name, pin, avatar, created } }
+const ACTIVE_KEY = "jerkmania.active.v1";  // active account key
+const acctKey = (key) => "jerkmania.acct." + key;
+const userKey = (name) => (name || "").trim().toLowerCase();
+
+function readJSON(k, d) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : d; } catch { return d; } }
+function writeJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* quota */ } }
+
+export function listUsers() {
+  const u = readJSON(USERS_KEY, {});
+  return Object.keys(u).map((key) => ({ key, name: u[key].name, hasPin: !!u[key].pin, avatar: u[key].avatar || "🫵" }));
+}
+export function getActiveUser() { try { return localStorage.getItem(ACTIVE_KEY) || null; } catch { return null; } }
+export function activeUserName() {
+  const k = getActiveUser(); if (!k) return null;
+  const u = readJSON(USERS_KEY, {}); return u[k] ? u[k].name : null;
+}
+export function setActiveUser(key) { try { key ? localStorage.setItem(ACTIVE_KEY, key) : localStorage.removeItem(ACTIVE_KEY); } catch {} }
+export function logoutUser() { setActiveUser(null); }
+
+export function createUser(name, pin = "", avatar = "🫵") {
+  name = (name || "").trim();
+  if (!name) return { ok: false, error: "Enter a profile name." };
+  if (name.length > 16) return { ok: false, error: "Name too long (16 max)." };
+  if (pin && !/^\d{4}$/.test(pin)) return { ok: false, error: "PIN must be exactly 4 digits." };
+  const users = readJSON(USERS_KEY, {});
+  const key = userKey(name);
+  if (users[key]) return { ok: false, error: "That name is taken on this device." };
+  users[key] = { name, pin: pin || null, avatar, created: Date.now() };
+  writeJSON(USERS_KEY, users);
+  const p = migrate(structuredClone(DEFAULT_PROFILE));
+  p.name = name;
+  writeJSON(acctKey(key), p);
+  setActiveUser(key);
+  return { ok: true, key };
+}
+
+export function loginUser(name, pin = "") {
+  const users = readJSON(USERS_KEY, {});
+  const key = userKey(name);
+  const u = users[key];
+  if (!u) return { ok: false, error: "No such profile on this device." };
+  if (u.pin && u.pin !== pin) return { ok: false, error: "Wrong PIN." };
+  setActiveUser(key);
+  return { ok: true, key };
+}
+
+export function deleteUser(name) {
+  const users = readJSON(USERS_KEY, {});
+  const key = userKey(name);
+  delete users[key];
+  writeJSON(USERS_KEY, users);
+  try { localStorage.removeItem(acctKey(key)); } catch {}
+  if (getActiveUser() === key) setActiveUser(null);
+}
+
+// Fold a schema-merge over a stored profile blob.
+function mergeProfile(p) {
+  return migrate({
+    ...structuredClone(DEFAULT_PROFILE),
+    ...p,
+    stats: { ...DEFAULT_PROFILE.stats, ...(p.stats || {}) },
+    settings: { ...DEFAULT_PROFILE.settings, ...(p.settings || {}) },
+    achievements: Array.isArray(p.achievements) ? p.achievements : [],
+    history: Array.isArray(p.history) ? p.history : [],
+    ownedAuras: Array.isArray(p.ownedAuras) && p.ownedAuras.length ? p.ownedAuras : ["none"],
+    titles: Array.isArray(p.titles) ? p.titles : [],
+    bests: p.bests && typeof p.bests === "object" ? p.bests : {},
+  });
+}
+
+function loadSlot(key) {
+  const raw = (() => { try { return localStorage.getItem(acctKey(key)); } catch { return null; } })();
+  if (!raw) return migrate(structuredClone(DEFAULT_PROFILE));
+  try { return mergeProfile(JSON.parse(raw)); } catch { return migrate(structuredClone(DEFAULT_PROFILE)); }
+}
+
 export function loadProfile() {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return migrate(structuredClone(DEFAULT_PROFILE));
-    const p = JSON.parse(raw);
-    // shallow-merge to survive schema additions, then run versioned migration
-    const merged = {
-      ...structuredClone(DEFAULT_PROFILE),
-      ...p,
-      stats: { ...DEFAULT_PROFILE.stats, ...(p.stats || {}) },
-      settings: { ...DEFAULT_PROFILE.settings, ...(p.settings || {}) },
-      achievements: Array.isArray(p.achievements) ? p.achievements : [],
-      history: Array.isArray(p.history) ? p.history : [],
-      ownedAuras: Array.isArray(p.ownedAuras) && p.ownedAuras.length ? p.ownedAuras : ["none"],
-      titles: Array.isArray(p.titles) ? p.titles : [],
-      bests: p.bests && typeof p.bests === "object" ? p.bests : {},
-    };
-    return migrate(merged);
-  } catch {
-    return migrate(structuredClone(DEFAULT_PROFILE));
+  const active = getActiveUser();
+  // One-time migration: an old single-profile save becomes a named account so
+  // existing players keep their progress and stay logged in.
+  if (!active && !localStorage.getItem(USERS_KEY)) {
+    try {
+      const legacy = localStorage.getItem(KEY);
+      if (legacy) {
+        const p = JSON.parse(legacy);
+        const name = (p.name && String(p.name).trim()) || "Player";
+        const key = userKey(name);
+        const users = {}; users[key] = { name, pin: null, avatar: (p.settings && p.settings.avatar) || "🫵", created: Date.now() };
+        writeJSON(USERS_KEY, users);
+        writeJSON(acctKey(key), p);
+        setActiveUser(key);
+        return loadSlot(key);
+      }
+    } catch { /* fall through to guest */ }
   }
+  if (active) return loadSlot(active);
+  return migrate(structuredClone(DEFAULT_PROFILE));   // transient guest until login
 }
 
 export function saveProfile(p) {
-  try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* ignore quota */ }
+  const active = getActiveUser();
+  try { localStorage.setItem(active ? acctKey(active) : KEY, JSON.stringify(p)); } catch { /* ignore quota */ }
 }
 
 // ---- Progression -----------------------------------------------------------

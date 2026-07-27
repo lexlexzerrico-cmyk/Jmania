@@ -1,7 +1,10 @@
 /* ============================================================
    main.js — app controller: router, input, match lifecycle
    ============================================================ */
-import { loadProfile, saveProfile, applyMatchResult, resetProfile } from "./storage.js";
+import {
+  loadProfile, saveProfile, applyMatchResult, resetProfile,
+  getActiveUser, listUsers, createUser, loginUser, logoutUser, activeUserName,
+} from "./storage.js";
 import { rankFromIndex, levelProgress, MAX_RANK_INDEX } from "./ranks.js";
 import { ClapEngine } from "./audio.js";
 import { Camera } from "./camera.js";
@@ -30,7 +33,7 @@ import {
   renderMicPanel, renderArena, renderResults, renderAchievements, renderSettings,
   renderShop, renderWorld, renderBossFight, renderBossResults, renderAdmin, renderVersus,
   renderTutorial, renderSummon, renderCollection, renderLoadout, goonCard, GOON_ICON,
-  initParticles, renderConnect, renderNetStatus,
+  initParticles, renderConnect, renderNetStatus, renderLogin,
 } from "./ui.js";
 
 const ADMIN_CODE = "JERKGOD";
@@ -585,6 +588,9 @@ function wireSettings() {
     toast("Mic will recalibrate on your next Clap Mode game", "🎚️");
     state.sfx.click();
   });
+
+  const sw = $("#switch-profile");
+  if (sw) sw.addEventListener("click", () => { state.sfx.click(); switchProfile(); });
 
   $("#reset-btn").addEventListener("click", () => {
     confirmModal("Reset ALL progress — rank, level, stats, JC, achievements and history? This can't be undone.", () => {
@@ -2113,14 +2119,86 @@ function checkTitleUnlocks(prevLevel) {
 }
 
 // ---------------------------------------------------------------------------
+// Login gate
+// ---------------------------------------------------------------------------
+function showLogin() {
+  app.innerHTML = renderLogin(listUsers());
+  const create = $("#login-create");
+  const nameEl = $("#login-name"), pinEl = $("#login-pin");
+  const doCreate = () => {
+    const r = createUser(nameEl.value, (pinEl.value || "").trim());
+    if (!r.ok) { toast(r.error, "⚠️"); return; }
+    state.sfx.win();
+    enterGame();
+  };
+  if (create) create.addEventListener("click", doCreate);
+  if (pinEl) pinEl.addEventListener("keydown", (e) => { if (e.key === "Enter") doCreate(); });
+  if (nameEl) nameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { if (pinEl) pinEl.focus(); } });
+
+  $$(".login-user").forEach((btn) => btn.addEventListener("click", () => {
+    const name = btn.dataset.user;
+    const u = listUsers().find((x) => x.name === name);
+    if (u && u.hasPin) { askPin(name); return; }
+    const r = loginUser(name, "");
+    if (r.ok) { state.sfx.click(); enterGame(); } else toast(r.error, "🔒");
+  }));
+}
+
+function askPin(name) {
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.innerHTML = `
+    <div class="modal">
+      <h3>🔒 ${escapeHtmlSafe(name)}</h3>
+      <div class="modal-note">Enter this profile's 4-digit PIN.</div>
+      <input type="password" class="text-input" id="pin-in" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off" />
+      <div class="row" style="justify-content:flex-end;margin-top:16px">
+        <button class="btn ghost" data-no>Cancel</button>
+        <button class="btn" id="pin-ok">Enter</button>
+      </div>
+    </div>`;
+  document.body.appendChild(back);
+  const input = back.querySelector("#pin-in"); input.focus();
+  const submit = () => {
+    const r = loginUser(name, input.value.trim());
+    if (r.ok) { back.remove(); state.sfx.click(); enterGame(); }
+    else { toast(r.error, "🔒"); input.value = ""; input.focus(); }
+  };
+  back.querySelector("#pin-ok").addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  back.addEventListener("click", (e) => { if (e.target === back || e.target.closest("[data-no]")) back.remove(); });
+}
+function escapeHtmlSafe(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+// Load the active account's profile, re-apply its settings, and enter the game.
+function enterGame() {
+  state.profile = loadProfile();
+  state.clap.setSensitivity(state.profile.settings.sensitivity);
+  state.sfx.setEnabled(state.profile.settings.sfxOn);
+  applyTheme(state.profile.settings.theme);
+  initParticles(state.profile.settings.reducedMotion);
+  ensureQuests(state.profile);
+  syncAdminFab();
+  navTo("lobby");
+  refreshHud();
+  if (state.profile.settings.musicOn && !state.profile.settings.muteAll) musicBtn.classList.add("playing");
+  if (!state.profile.tutorialSeen) setTimeout(showTutorial, 500);
+}
+
+// Log out → back to the profile picker.
+function switchProfile() {
+  saveProfile(state.profile);
+  logoutUser();
+  adminOverlay.classList.add("hidden");
+  showLogin();
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 initParticles(state.profile.settings.reducedMotion);
-ensureQuests(state.profile);
-navTo("lobby");
-refreshHud();
-if (state.profile.settings.musicOn && !state.profile.settings.muteAll) musicBtn.classList.add("playing");
-if (!state.profile.tutorialSeen) setTimeout(showTutorial, 500);
+if (getActiveUser()) enterGame();
+else showLogin();
 
 // Expose for debugging
 window.JERKMANIA = state;

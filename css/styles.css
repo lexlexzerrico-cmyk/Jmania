@@ -886,6 +886,25 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 .net-fallback { margin-top: 16px; border-style: dashed; }
 .net-box .btn { margin-top: 8px; }
 
+/* ---- Login / profile picker ---- */
+.login-screen { min-height: 78vh; display: grid; place-items: center; }
+.login-card { width: min(440px, calc(100vw - 28px)); padding: 30px 26px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); box-shadow: var(--shadow); text-align: center; }
+.login-logo { font-family: var(--font-display); font-size: 30px; letter-spacing: 2px; background: linear-gradient(90deg,#ff3d7f,#ffd05a,#22e0d6,#b14dff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.login-sub { color: var(--text-dim); font-size: 13px; margin: 6px 0 20px; }
+.login-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.login-user { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-md); background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); color: var(--text); cursor: pointer; transition: all 0.15s; }
+.login-user:hover { border-color: var(--accent); box-shadow: var(--glow-accent); transform: translateY(-2px); }
+.lu-av { font-size: 26px; }
+.lu-name { font-family: var(--font-display); font-size: 15px; flex: 1; text-align: left; }
+.lu-lock { opacity: 0.7; font-size: 14px; }
+.login-or { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 12px; }
+.login-new { display: flex; flex-direction: column; gap: 10px; }
+.login-note { margin-top: 18px; font-size: 11.5px; color: var(--text-faint); line-height: 1.6; }
+.profile-row { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--stroke); }
+.profile-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0 4px; }
+.profile-who { font-size: 15px; }
+.set-sub { font-size: 11.5px; color: var(--text-faint); }
+
 /* ---- Online connecting overlay ---- */
 .net-status-back { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: rgba(6,4,16,0.82); backdrop-filter: blur(6px); }
 .net-status { text-align: center; padding: 32px 40px; border-radius: var(--r-xl); background: var(--panel); border: 1px solid var(--stroke); box-shadow: var(--shadow); max-width: 90vw; }

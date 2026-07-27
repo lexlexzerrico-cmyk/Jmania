@@ -12,6 +12,7 @@
    tracked per-run, so progress persists within a run.
    ============================================================ */
 import { BOSS_ROSTER, bossForTier, entityForTier, ENTITIES } from "./rpg.js";
+import { saveProfile } from "./storage.js";
 
 export const TILE = 16;
 const SPAWN_CELL = 6;     // world is diced into 6×6-tile cells; each may spawn something
@@ -224,7 +225,7 @@ export class World8Bit {
 
   _saveRun() {
     this.run.px = this.px; this.run.py = this.py; this.run.steps = this.steps || 0;
-    try { localStorage.setItem("jerkmania.profile.v1", JSON.stringify(this.profile)); } catch {}
+    saveProfile(this.profile);   // account-aware (writes the logged-in profile slot)
   }
 
   _solidAt(x, y) {

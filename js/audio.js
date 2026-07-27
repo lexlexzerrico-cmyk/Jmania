@@ -22,8 +22,8 @@ export class ClapEngine extends EventTarget {
     this.freqBuf = null;
     this.noiseFloor = 0.004;   // adaptive background energy
     this.lastClapAt = 0;
-    this.refractoryMs = 70;    // min gap between counted claps (fast hands ok)
-    this.armed = true;         // must fall below floor before next onset
+    this.refractoryMs = 55;    // min gap between counted claps (≈18 cps ceiling)
+    this._prevRms = 0;         // previous frame energy (for rising-edge detection)
     this.sensitivity = 0.65;   // 0..1 (higher = easier to trigger)
 
     this.level = 0;            // smoothed level for meters (0..1)
@@ -103,6 +103,34 @@ export class ClapEngine extends EventTarget {
     return { rms, hfRatio };
   }
 
+  // Decide whether this frame is a clap ONSET. Returns clap strength (>0) or 0.
+  // Onset = a sharp RISE in energy above the adaptive threshold — NOT merely
+  // "loud". Detecting the rising edge (energy flux) is what lets rapid claps
+  // each count: the old detector had to fall near-silent to re-arm, so fast
+  // clapping (which keeps the room loud between claps) got mostly dropped.
+  _detect(rms, hfRatio, now) {
+    // Adaptive noise floor tracks quiet background (only adapts while quiet).
+    if (rms < this.noiseFloor * 1.6) this.noiseFloor += (rms - this.noiseFloor) * 0.08;
+    this.noiseFloor = Math.max(0.0012, this.noiseFloor);
+
+    // Threshold scales with sensitivity: high sens => lower multiplier.
+    const mult = 3.2 - this.sensitivity * 2.0;          // 3.2 .. 1.2
+    const absFloor = 0.016 - this.sensitivity * 0.012;  // 0.016 .. 0.004
+    const threshold = Math.max(absFloor, this.noiseFloor * mult);
+
+    // Rising edge: how much louder this frame is than the last.
+    const flux = rms - this._prevRms;
+    this._prevRms = rms;
+    const fluxNeed = Math.max(0.0018, threshold * (0.5 - this.sensitivity * 0.28));
+
+    const isOnset = rms > threshold && flux > fluxNeed && hfRatio > 0.20;
+    if (isOnset && now - this.lastClapAt > this.refractoryMs) {
+      this.lastClapAt = now;
+      return Math.min(1, rms / (threshold * 2));
+    }
+    return 0;
+  }
+
   _loop() {
     if (!this.running) return;
     const now = performance.now();
@@ -112,31 +140,8 @@ export class ClapEngine extends EventTarget {
     this.level += (Math.min(1, rms * 6) - this.level) * 0.3;
     this.dispatchEvent(new CustomEvent("level", { detail: { level: this.level, rms } }));
 
-    // Adaptive noise floor tracks quiet background; adapts a bit faster so a
-    // noisy room stops causing false triggers within a couple of seconds.
-    if (rms < this.noiseFloor * 1.6) {
-      this.noiseFloor += (rms - this.noiseFloor) * 0.08;
-    }
-    this.noiseFloor = Math.max(0.0012, this.noiseFloor);
-
-    // Threshold scales with sensitivity: high sens => lower multiplier.
-    const mult = 3.2 - this.sensitivity * 2.0;          // 3.2 .. 1.2
-    const absFloor = 0.016 - this.sensitivity * 0.012;  // 0.016 .. 0.004
-    const threshold = Math.max(absFloor, this.noiseFloor * mult);
-
-    // Claps are broadband transients; the HF requirement is looser now so
-    // softer/cupped claps still register.
-    const isTransient = rms > threshold && hfRatio > 0.22;
-
-    if (isTransient && this.armed && now - this.lastClapAt > this.refractoryMs) {
-      this.lastClapAt = now;
-      this.armed = false;
-      const strength = Math.min(1, rms / (threshold * 2));
-      this.dispatchEvent(new CustomEvent("clap", { detail: { t: now, strength } }));
-    }
-
-    // Re-arm quickly once the transient decays so rapid claps all count.
-    if (rms < threshold * 0.7) this.armed = true;
+    const strength = this._detect(rms, hfRatio, now);
+    if (strength) this.dispatchEvent(new CustomEvent("clap", { detail: { t: now, strength } }));
 
     this.raf = requestAnimationFrame(() => this._loop());
   }

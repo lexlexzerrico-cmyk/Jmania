@@ -1471,40 +1471,55 @@ function wireConnect() {
   const createBtn = $("#net-create");
   if (createBtn) createBtn.addEventListener("click", async () => {
     if (!netSupported()) { toast("This browser can't do WebRTC 1v1", "🚫"); return; }
-    createBtn.disabled = true; createBtn.textContent = "Generating…";
+    createBtn.disabled = true; createBtn.textContent = "Generating… (a couple secs)";
     const net = newNet(false);
     try {
-      const code = await net.createOffer();
+      const code = await Promise.race([
+        net.createOffer(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+      ]);
       $("#host-out").style.display = "";
       $("#host-code").value = code;
       createBtn.textContent = "✓ Code ready — send it";
-    } catch { toast("Couldn't create a code (WebRTC blocked here?)", "🚫"); createBtn.disabled = false; createBtn.textContent = "Create connect code"; closeNet(); }
+    } catch { toast("Couldn't create a code — make sure you're on the github.io site, not the preview", "🚫"); createBtn.disabled = false; createBtn.textContent = "Create connect code"; closeNet(); }
   });
   const hostCopy = $("#host-copy"); if (hostCopy) hostCopy.addEventListener("click", () => copyText($("#host-code").value));
   const hostConnect = $("#host-connect");
   if (hostConnect) hostConnect.addEventListener("click", async () => {
-    const ans = ($("#host-answer").value || "").trim();
+    const ans = ($("#host-answer").value || "").trim().replace(/\s+/g, "");
     if (!ans) { toast("Paste your friend's reply code first", "📋"); return; }
+    if (!ans.startsWith("JM")) { toast("That reply code looks cut off — have them copy the whole thing again", "✂️"); return; }
     if (!state.net) { toast("Create a code first", "①"); return; }
     netStatus("Connecting…", "Linking to your friend");
-    try { await state.net.acceptAnswer(ans); } catch { toast("That reply code didn't work", "🚫"); clearNetStatus(); }
+    try { await state.net.acceptAnswer(ans); } catch { toast("That reply code didn't work — copy the whole thing again", "🚫"); clearNetStatus(); }
   });
 
   // ---- Friend (copy-paste) — join ----
   const joinBtn = $("#net-join");
   if (joinBtn) joinBtn.addEventListener("click", async () => {
     if (!netSupported()) { toast("This browser can't do WebRTC 1v1", "🚫"); return; }
-    const offer = ($("#join-offer").value || "").trim();
+    const offer = ($("#join-offer").value || "").trim().replace(/\s+/g, "");
     if (!offer) { toast("Paste your friend's code first", "📋"); return; }
-    joinBtn.disabled = true; joinBtn.textContent = "Generating…";
+    if (!offer.startsWith("JM")) { toast("That doesn't look like a full code — copy it again (it may have been cut off)", "✂️"); return; }
+    joinBtn.disabled = true; joinBtn.textContent = "Generating… (a couple secs)";
     const net = newNet(false);
     try {
-      const reply = await net.acceptOffer(offer);
+      // Guard so a stuck handshake can't spin forever.
+      const reply = await Promise.race([
+        net.acceptOffer(offer),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000)),
+      ]);
       $("#join-out").style.display = "";
       $("#join-code").value = reply;
       joinBtn.textContent = "✓ Reply ready — send it back";
       netStatus("Waiting for your friend…", "The match starts when they connect");
-    } catch { toast("That code didn't work", "🚫"); joinBtn.disabled = false; joinBtn.textContent = "Generate reply →"; closeNet(); }
+    } catch (e) {
+      const msg = String(e && e.message) === "timeout"
+        ? "Timed out — try again, and make sure you're both on the github.io site (not the preview)"
+        : "That code didn't work — copy the whole thing again";
+      toast(msg, "🚫");
+      joinBtn.disabled = false; joinBtn.textContent = "Generate reply →"; closeNet();
+    }
   });
   const joinCopy = $("#join-copy"); if (joinCopy) joinCopy.addEventListener("click", () => copyText($("#join-code").value));
 

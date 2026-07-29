@@ -94,14 +94,24 @@ export class Net extends EventTarget {
   _iceComplete(pc) {
     return new Promise((res) => {
       if (pc.iceGatheringState === "complete") return res();
-      const check = () => {
-        if (pc.iceGatheringState === "complete") {
-          pc.removeEventListener("icegatheringstatechange", check);
-          res();
-        }
+      let done = false;
+      const finish = () => {
+        if (done) return; done = true;
+        pc.removeEventListener("icegatheringstatechange", onState);
+        pc.removeEventListener("icecandidate", onCand);
+        clearTimeout(t);
+        res();
       };
-      pc.addEventListener("icegatheringstatechange", check);
-      setTimeout(res, 2600); // fall back to whatever we have
+      // Resolve the MOMENT gathering ends (end-of-candidates fires a null
+      // candidate) instead of always waiting a fixed delay — this is what made
+      // "Generate reply" feel like it hung on phone networks.
+      const onState = () => { if (pc.iceGatheringState === "complete") finish(); };
+      const onCand = (e) => { if (!e.candidate) finish(); };
+      pc.addEventListener("icegatheringstatechange", onState);
+      pc.addEventListener("icecandidate", onCand);
+      // Hard cap: after 1.4s, use whatever candidates we have. Host/local
+      // candidates alone connect two devices on most networks.
+      const t = setTimeout(finish, 1400);
     });
   }
 

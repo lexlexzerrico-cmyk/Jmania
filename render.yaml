@@ -1,0 +1,16 @@
+# One-click deploy for the JERKMANIA online-1v1 matchmaking server.
+# On Render: New → Blueprint → point at this repo → Apply. Render builds the
+# server in /server and gives you a public https/wss URL. Paste that URL
+# (as wss://) into the game: Online 1v1 → Quick Match / Ranked.
+services:
+  - type: web
+    name: jerkmania-signal
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

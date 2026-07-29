@@ -12,6 +12,23 @@ The server never sees any gameplay. It only introduces two players and passes
 along the one-time WebRTC handshake; the actual clap battle runs directly
 browser-to-browser.
 
+## Deploy in ~2 minutes (Render, free)
+
+There's a `render.yaml` blueprint at the repo root, so it's basically one-click:
+
+1. Make a free account at **render.com** (you can sign in with GitHub).
+2. **New → Blueprint**, pick the **`lexlexzerrico-cmyk/jmania`** repo, **Apply**.
+   Render reads `render.yaml`, builds the `server/` folder, and deploys it.
+3. When it's live, copy the service URL — it looks like
+   `https://jerkmania-signal.onrender.com`.
+4. In the game: **Online 1v1 → Quick Match / Ranked**, paste the URL but change
+   `https://` to **`wss://`** →
+   `wss://jerkmania-signal.onrender.com`, then hit **Find Ranked Match** (or open
+   a **Private room** and share the code with your friend).
+
+> Free Render services sleep after ~15 min idle and take ~30–60s to wake on the
+> first connection — just wait on that first "Searching…" and it'll connect.
+
 ## Run it locally (test)
 
 ```bash

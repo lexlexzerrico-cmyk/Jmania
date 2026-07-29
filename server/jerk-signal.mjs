@@ -14,9 +14,17 @@
    Run:   npm install && npm start      (see README.md for hosting)
    ============================================================ */
 import { WebSocketServer } from "ws";
+import http from "http";
 
 const PORT = process.env.PORT || 8080;
-const wss = new WebSocketServer({ port: PORT });
+
+// A tiny HTTP server so hosting health checks (which GET "/") get a 200;
+// the WebSocket server shares the same port for the actual signaling.
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "content-type": "text/plain" });
+  res.end("JERKMANIA signaling server OK");
+});
+const wss = new WebSocketServer({ server });
 
 const rooms = new Map();   // roomCode -> [clientA, clientB]
 let queue = [];            // clients waiting for a ranked match
@@ -79,4 +87,4 @@ wss.on("connection", (ws) => {
   ws.on("error", () => {});
 });
 
-console.log(`JERKMANIA signaling server listening on :${PORT}`);
+server.listen(PORT, () => console.log(`JERKMANIA signaling server listening on :${PORT}`));

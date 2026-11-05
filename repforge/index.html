@@ -53,6 +53,7 @@
       <div class="seg" role="group" aria-label="Exercise">
         <button type="button" id="exPush" aria-pressed="true">Push-ups</button>
         <button type="button" id="exSit" aria-pressed="false">Sit-ups</button>
+        <button type="button" id="exSquat" aria-pressed="false">Squats</button>
       </div>
 
       <div class="stage mirror" id="stage">
@@ -83,6 +84,57 @@
         <div style="padding:12px 14px 0"><h3 style="margin:0">Recent sets</h3></div>
         <ul id="recent"></ul>
       </div>
+    </section>
+
+    <!-- HUB / DASHBOARD -->
+    <section class="view" id="view-hub" aria-label="Dashboard" hidden>
+      <div class="view-head"><h2>Hub</h2><span class="note" id="hubNote">Your training at a glance</span></div>
+      <div class="tiles" id="hubTiles"></div>
+      <div class="panel strip" id="hubStrip"></div>
+      <div class="hub-grid">
+        <div class="panel chart-card">
+          <div class="card-head">
+            <h3>Activity</h3>
+            <div class="seg mini" id="rangeSeg" role="group" aria-label="Time range">
+              <button type="button" data-range="7d" aria-pressed="true">7D</button>
+              <button type="button" data-range="30d" aria-pressed="false">30D</button>
+              <button type="button" data-range="12w" aria-pressed="false">12W</button>
+            </div>
+          </div>
+          <div class="legend"><span><i style="background:#3987e5"></i>Push-ups</span><span><i style="background:#d95926"></i>Sit-ups</span><span><i style="background:#199e70"></i>Squats</span>
+            <button class="link-btn" type="button" id="chartTableBtn" aria-pressed="false"><svg class="i" data-icon="table"></svg>Table</button></div>
+          <div class="chart" id="chart"></div>
+          <div class="table-wrap" id="chartTable" hidden></div>
+          <div class="consistency" id="consistency"></div>
+        </div>
+        <div class="panel cal-card">
+          <div class="card-head">
+            <h3 id="calTitle">Calendar</h3>
+            <div class="cal-nav"><button class="icon-btn" type="button" id="calPrev" aria-label="Previous month"><svg class="i" data-icon="chevl"></svg></button><button class="icon-btn" type="button" id="calNext" aria-label="Next month"><svg class="i" data-icon="chev"></svg></button></div>
+          </div>
+          <div class="cal-wd"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+          <div class="cal-grid" id="calGrid"></div>
+          <div class="cal-key"><span><i class="k-lv"></i>More reps</span><span><i class="k-rest"></i>Rest day</span><span><i class="k-rec"></i>Record</span><span><i class="k-q"></i>Quest</span></div>
+          <div class="day-detail" id="dayDetail"></div>
+        </div>
+      </div>
+      <h3>Personal records</h3>
+      <div class="recs" id="hubRecords"></div>
+      <div class="hub-grid">
+        <div class="panel feed"><h3>Recent achievements</h3><ul id="hubAch"></ul></div>
+        <div class="panel feed"><h3>Recent workouts</h3><ul id="hubSets"></ul></div>
+      </div>
+    </section>
+
+    <!-- QUESTS -->
+    <section class="view" id="view-quests" aria-label="Quests" hidden>
+      <div class="view-head"><h2>Quests</h2></div>
+      <div class="panel q-summary" id="questSummary"></div>
+      <div class="q-head"><h3>Daily</h3><span class="note" id="questDailyMeta"></span></div>
+      <div class="q-list" id="questDaily"></div>
+      <div class="q-head"><h3>Weekly</h3><span class="note" id="questWeeklyMeta"></span></div>
+      <div class="q-list" id="questWeekly"></div>
+      <p class="note">Quest targets stay the same no matter how much you train, and rewards never grow past the target. Listen to your body and take rest days.</p>
     </section>
 
     <!-- RANKS -->
@@ -132,13 +184,17 @@
   </main>
 </div>
 
-<nav class="tabs" aria-label="Main">
-  <div class="tabs-in">
-    <button class="tab" type="button" data-go="train"><svg class="i" data-icon="dumbbell"></svg>Train</button>
-    <button class="tab" type="button" data-go="ranks"><svg class="i" data-icon="trophy"></svg>Ranks</button>
-    <button class="tab" type="button" data-go="store"><svg class="i" data-icon="bag"></svg>Store</button>
-    <button class="tab" type="button" data-go="me"><svg class="i" data-icon="user"></svg>Profile</button>
+<nav class="nav" aria-label="Main">
+  <div class="nav-brand">Rep<em>forge</em></div>
+  <div class="nav-in">
+    <button class="tab" type="button" data-go="train"><svg class="i" data-icon="dumbbell"></svg><span>Train</span></button>
+    <button class="tab" type="button" data-go="hub"><svg class="i" data-icon="chart"></svg><span>Hub</span></button>
+    <button class="tab" type="button" data-go="quests"><svg class="i" data-icon="scroll"></svg><span>Quests</span><b class="q-badge" hidden>0</b></button>
+    <button class="tab" type="button" data-go="ranks"><svg class="i" data-icon="trophy"></svg><span>Ranks</span></button>
+    <button class="tab" type="button" data-go="store"><svg class="i" data-icon="bag"></svg><span>Store</span></button>
+    <button class="tab desk" type="button" data-go="me"><svg class="i" data-icon="user"></svg><span>Profile</span></button>
   </div>
+  <div class="nav-foot desk"><span class="net" id="navNet">Local</span></div>
 </nav>
 
 <div class="overlay center" id="onboard" hidden>

@@ -2,7 +2,9 @@
 
 Count push-ups and sit-ups with your phone camera, earn **Grit**, climb from **Rookie to Legend**, and top the **public leaderboards**.
 
-- **Train**: camera body tracking counts each rep (or tap to count, for half rewards). Set timer, voice count, live rank card, daily drop, active boosts.
+- **Train**: camera body tracking counts push-ups, sit-ups and squats (or tap to count, for half rewards). Set timer, voice count, live rank card, daily drop, active boosts.
+- **Hub**: today / week / month / lifetime reps, rank, level, Grit, streak, an activity chart (7 days, 30 days, 12 weeks, with a table view), consistency, personal records with history, a training calendar with per-day detail, recent achievements and workouts.
+- **Quests**: a daily check-in plus 3 rotating daily quests, and 5 weekly quests. Rewards are claimed once per period and checked by the server. Rest days (up to 2 a week) keep your streak and count for the check-in.
 - **Ranks**: public leaderboards for this week, rank points, push-ups, sit-ups and all reps, with a podium and your own position pinned.
 - **Store**: boosts (Double Grit, XP Surge, Rank Rush, Streak Shield), titles and color themes.
 - **Profile**: stats, title and theme locker, the full rank ladder, settings, account.
@@ -28,7 +30,9 @@ Until you add keys it runs in **local mode**: everything works, but progress and
    The anon key is designed to be public. Never paste the `service_role` / secret key.
 6. Commit and push. The Ranks tab now says **Live**.
 
-**Why scores can be trusted:** players can read every table but can't write any of them directly. Every change goes through a database function that checks the rules: 1–300 reps per set, at most 2 reps a second, 5 seconds between sets, store prices, boost timers, streaks and title unlocks. Tap-counted sets earn half rank points.
+**Upgrading:** when a new version of `schema.sql` comes out, paste and run the whole file again. It upgrades the database in place and keeps every player, set and purchase.
+
+**Why scores can be trusted:** players can read public tables but can't write any of them directly. Every change goes through a database function that checks the rules: 1–300 reps per set, at most 2 reps a second, 5 seconds between sets, store prices, boost timers, streaks, quest progress (recomputed from real sets), one claim per quest per period, records and title unlocks. Days reset at each player's local midnight, and the time zone can only change once a week. Tap-counted sets earn half rank points and never count for single-set records.
 
 Want to wipe a cheater? In Supabase **Table Editor → profiles**, delete their row. Their sets are removed with it.
 
@@ -53,8 +57,12 @@ The body-tracking files are shared with the simpler counter in [`../rep-tally/me
 | Grit | 1 per rep | ½ per rep |
 | Rank points | 1 per push-up, 0.8 per sit-up | half that |
 | XP | 2 per rep | 2 per rep |
+| Single-set records | yes | no |
 
 - **Daily drop:** 50 Grit + 10 per streak day (up to +100).
-- **Titles you earn:** each gives +100 Grit (First Rep, Half Century, Centurion, Thousand Club, Ten-K Machine, Week Warrior, Iron Habit, Gilded, Living Legend).
+- **Titles you earn:** each gives +100 Grit (First Rep, Half Century, Centurion, Thousand Club, Ten-K Machine, Week Warrior, Iron Habit, Gilded, Living Legend, Questbound, Restwise, Record Breaker).
+- **Personal records:** most push-ups / sit-ups / squats in one set (camera only), best day, best week, longest session (sets less than 15 minutes apart), most training days in a week.
 - **Ranks:** Rookie → Bronze → Silver → Gold → Platinum → Diamond → Titan (three divisions each) → Legend at 14,000 RP.
-- **Changing prices or items:** edit both `js/catalog.js` (names) and the `insert into public.items` list in `supabase/schema.sql` (prices), then re-run the SQL.
+- **Changing prices, items or quests:** edit both `js/catalog.js` and the matching `insert` list in `supabase/schema.sql`, then re-run the SQL.
+
+See [ROADMAP.md](ROADMAP.md) for what's coming next.

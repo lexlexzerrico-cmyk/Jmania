@@ -62,6 +62,9 @@ export const ITEMS = [
   { id: "streak30",  kind: "title", name: "Iron Habit",      earn: "30-day streak" },
   { id: "gilded",    kind: "title", name: "Gilded",          earn: "Reach Gold rank" },
   { id: "legend",    kind: "title", name: "Living Legend",   earn: "Reach Legend rank" },
+  { id: "questbound",    kind: "title", name: "Questbound",     earn: "Claim 25 quest rewards" },
+  { id: "restwise",      kind: "title", name: "Restwise",       earn: "Log 5 rest days" },
+  { id: "recordbreaker", kind: "title", name: "Record Breaker", earn: "Beat your personal records 5 times" },
   // store titles
   { id: "gymrat",        kind: "title", name: "Gym Rat",        price: 300 },
   { id: "corecrusher",   kind: "title", name: "Core Crusher",   price: 450 },
@@ -88,4 +91,40 @@ export const ITEMS = [
 export const item = (id) => ITEMS.find((x) => x.id === id);
 export const titleName = (id) => item(id)?.name || "Rookie";
 
-export const EARNED_TITLES = ["first_set", "fifty", "century", "k1", "k10", "streak7", "streak30", "gilded", "legend"];
+export const EARNED_TITLES = ["first_set", "fifty", "century", "k1", "k10", "streak7", "streak30", "gilded", "legend", "recordbreaker"];
+
+// Exercise colours are fixed per exercise (validated for colour-blind separation on the dark panels).
+export const EXERCISES = {
+  push:  { name: "Push-ups", one: "push-up", color: "#3987e5", rp: 1.0 },
+  sit:   { name: "Sit-ups",  one: "sit-up",  color: "#d95926", rp: 0.8 },
+  squat: { name: "Squats",   one: "squat",   color: "#199e70", rp: 0.8 }
+};
+export const KINDS = ["push", "sit", "squat"];
+
+export const RECORDS = [
+  { key: "set_push",     label: "Most push-ups in a set", unit: "reps", cam: true },
+  { key: "set_sit",      label: "Most sit-ups in a set",  unit: "reps", cam: true },
+  { key: "set_squat",    label: "Most squats in a set",   unit: "reps", cam: true },
+  { key: "day_reps",     label: "Best day",               unit: "reps" },
+  { key: "week_reps",    label: "Best week",              unit: "reps" },
+  { key: "session_secs", label: "Longest session",        unit: "time" },
+  { key: "week_days",    label: "Most consistent week",   unit: "days" }
+];
+export const recordMeta = (k) => RECORDS.find((r) => r.key === k);
+
+// Mirror of quest_defs in schema.sql (local mode uses this; online the server's copy wins).
+export const QUESTS = [
+  { id: "d_checkin", period: "daily",  slot: "fixed", metric: "checkin",    target: 1,   xp: 20,  grit: 15,  title: "Show up",          description: "Finish any set, or log a rest day" },
+  { id: "d_reps50",  period: "daily",  slot: "pool",  metric: "reps",       target: 50,  xp: 40,  grit: 30,  title: "Fifty strong",     description: "Do 50 reps of anything" },
+  { id: "d_push30",  period: "daily",  slot: "pool",  metric: "reps_push",  target: 30,  xp: 40,  grit: 30,  title: "Press day",        description: "Do 30 push-ups" },
+  { id: "d_sit30",   period: "daily",  slot: "pool",  metric: "reps_sit",   target: 30,  xp: 40,  grit: 30,  title: "Core work",        description: "Do 30 sit-ups" },
+  { id: "d_squat30", period: "daily",  slot: "pool",  metric: "reps_squat", target: 30,  xp: 40,  grit: 30,  title: "Leg day",          description: "Do 30 squats" },
+  { id: "d_sets3",   period: "daily",  slot: "pool",  metric: "sets",       target: 3,   xp: 35,  grit: 25,  title: "Three rounds",     description: "Finish 3 sets" },
+  { id: "d_cam",     period: "daily",  slot: "pool",  metric: "cam_sets",   target: 1,   xp: 30,  grit: 25,  title: "On camera",        description: "Finish a camera-tracked set" },
+  { id: "d_secs180", period: "daily",  slot: "pool",  metric: "secs",       target: 180, xp: 35,  grit: 25,  title: "Three minutes",    description: "Train for 3 minutes in total" },
+  { id: "w_reps250", period: "weekly", slot: "fixed", metric: "reps",       target: 250, xp: 150, grit: 120, title: "Quarter thousand", description: "Do 250 reps this week" },
+  { id: "w_days4",   period: "weekly", slot: "fixed", metric: "days",       target: 4,   xp: 150, grit: 120, title: "Four-day week",    description: "Train on 4 different days" },
+  { id: "w_sets10",  period: "weekly", slot: "fixed", metric: "sets",       target: 10,  xp: 120, grit: 100, title: "Ten sets",         description: "Finish 10 sets this week" },
+  { id: "w_record",  period: "weekly", slot: "fixed", metric: "records",    target: 1,   xp: 120, grit: 100, title: "New personal best", description: "Beat one of your personal records" },
+  { id: "w_rest",    period: "weekly", slot: "fixed", metric: "rest",       target: 1,   xp: 80,  grit: 80,  title: "Recover",          description: "Log a rest day. Muscles grow while you recover." }
+];

@@ -29,12 +29,13 @@ export function createTracker({ video, canvas, stage, onRep, onPhase, onMeter, o
   const tilt = (a, b) => Math.atan2(Math.abs(a.y - b.y), Math.abs(a.x - b.x)) * 180 / Math.PI;
   function side(l) {
     const vis = (ids) => ids.reduce((s, i) => s + (l[i].visibility ?? 0), 0);
-    return vis([11, 13, 15, 23, 25]) >= vis([12, 14, 16, 24, 26]) ? { sh: 11, el: 13, wr: 15, hip: 23, kn: 25 } : { sh: 12, el: 14, wr: 16, hip: 24, kn: 26 };
+    return vis([11, 13, 15, 23, 25, 27]) >= vis([12, 14, 16, 24, 26, 28])
+      ? { sh: 11, el: 13, wr: 15, hip: 23, kn: 25, an: 27 } : { sh: 12, el: 14, wr: 16, hip: 24, kn: 26, an: 28 };
   }
 
   function update(l) {
-    const s = side(l), sh = pt(l, s.sh), el = pt(l, s.el), wr = pt(l, s.wr), hip = pt(l, s.hip);
-    const need = mode === "push" ? [sh, el, wr, hip] : [sh, hip];
+    const s = side(l), sh = pt(l, s.sh), el = pt(l, s.el), wr = pt(l, s.wr), hip = pt(l, s.hip), kn = pt(l, s.kn), an = pt(l, s.an);
+    const need = mode === "push" ? [sh, el, wr, hip] : mode === "squat" ? [sh, hip, kn, an] : [sh, hip];
     if (need.some((p) => p.v < 0.5)) { onPhase("Can’t see you · step back"); onMeter(0); return; }
     if (mode === "push") {
       const e = angle(sh, el, wr); smooth = smooth == null ? e : smooth * 0.5 + e * 0.5;
@@ -43,6 +44,14 @@ export function createTracker({ video, canvas, stage, onRep, onPhase, onMeter, o
       if (state === "up" && smooth < 95) { state = "down"; onPhase("Push!"); }
       else if (state === "down" && smooth > 150) { state = "up"; onRep(); onPhase("Down"); }
       else if (state === "up") onPhase("Down");
+    } else if (mode === "squat") {
+      // knee angle: ~170° standing, under 100° at the bottom; torso must stay upright-ish
+      const k = angle(hip, kn, an); smooth = smooth == null ? k : smooth * 0.5 + k * 0.5;
+      onMeter((170 - smooth) / 70);
+      if (tilt(sh, hip) < 45) { onPhase("Stand up tall"); return; }
+      if (state === "up" && smooth < 100) { state = "down"; onPhase("Drive up!"); }
+      else if (state === "down" && smooth > 160) { state = "up"; onRep(); onPhase("Sit back"); }
+      else if (state === "up") onPhase("Sit back");
     } else {
       const t = tilt(sh, hip); smooth = smooth == null ? t : smooth * 0.5 + t * 0.5;
       onMeter((smooth - 20) / 50);
@@ -60,7 +69,7 @@ export function createTracker({ video, canvas, stage, onRep, onPhase, onMeter, o
       if ((l[a].visibility ?? 1) < 0.4 || (l[b].visibility ?? 1) < 0.4) continue;
       ctx.beginPath(); ctx.moveTo(l[a].x * canvas.width, l[a].y * canvas.height); ctx.lineTo(l[b].x * canvas.width, l[b].y * canvas.height); ctx.stroke();
     }
-    const s = side(l), key = mode === "push" ? [s.sh, s.el, s.wr] : [s.sh, s.hip, s.kn];
+    const s = side(l), key = mode === "push" ? [s.sh, s.el, s.wr] : mode === "squat" ? [s.hip, s.kn, s.an] : [s.sh, s.hip, s.kn];
     ctx.fillStyle = accent();
     for (const i of key) { ctx.beginPath(); ctx.arc(l[i].x * canvas.width, l[i].y * canvas.height, ctx.lineWidth * 2.3, 0, Math.PI * 2); ctx.fill(); }
   }

@@ -1,68 +1,18 @@
 import cfg from "./config.js";
-import { createBackend, previewEarn, boostOn, BOARDS } from "./backend.js";
-import { RANKS, rankFor, levelFor, THEMES, ITEMS, item, titleName } from "./catalog.js";
+import { createBackend, previewEarn, boostOn, BOARDS, localDay } from "./backend.js";
+import { RANKS, rankFor, levelFor, THEMES, ITEMS, item, titleName, EXERCISES, KINDS, recordMeta } from "./catalog.js";
 import { createTracker } from "./tracker.js";
 import { createSpotify } from "./spotify.js";
+import { $, esc, fmt, clock, relTime, icon, hydrateIcons, emblem, toast, openSheet, closeSheet } from "./ui.js";
+import { loadHub, bindHub } from "./hub.js";
+import { loadQuests, bindQuests, refreshQuestBadge } from "./quests.js";
 
 // ------------------------------------------------------------------ helpers
-const $ = (s, r = document) => r.querySelector(s);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const fmt = (n) => Number(n || 0).toLocaleString();
-const clock = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
-const todayUTC = () => new Date().toISOString().slice(0, 10);
 const store = {
   get(k, d) { try { const v = localStorage.getItem("repforge-" + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem("repforge-" + k, JSON.stringify(v)); } catch (e) {} }
 };
-
-const ICONS = {
-  coin: '<circle cx="12" cy="12" r="9" fill="currentColor" opacity=".18"/><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5h4a1.8 1.8 0 0 1 0 3.6h-3a1.8 1.8 0 0 0 0 3.6h4M12 7.5v1.8M12 16.7v1.8"/>',
-  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
-  trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
-  shield: '<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
-  dumbbell: '<path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/>',
-  bag: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
-  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
-  gift: '<rect x="3" y="8" width="18" height="5" rx="1"/><path d="M5 13v8h14v-8M12 8v13M12 8c-2-4-6-4-6-1.5S9 8 12 8c3 0 6 1 6-1.5S14 4 12 8"/>',
-  flame: '<path d="M12 22c4 0 7-2.8 7-7 0-3-1.6-5.2-3.5-7-.4 2-1.5 3-2.5 3 .5-3-1-6.5-4-9 0 4-5 6.5-5 13 0 4.2 3.5 7 8 7z"/>',
-  music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
-  play: '<path d="M7 4v16l13-8z" fill="currentColor"/>',
-  pause: '<path d="M7 4h3v16H7zM14 4h3v16h-3z" fill="currentColor"/>',
-  next: '<path d="M5 4v16l11-8zM19 4v16"/>',
-  prev: '<path d="M19 4v16L8 12zM5 4v16"/>',
-  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
-  refresh: '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/>',
-  camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
-  flip: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9 13a3 3 0 0 1 5.2-2M15 13a3 3 0 0 1-5.2 2M14 9.5V11h-1.5M10 16.5V15h1.5"/>',
-  star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
-  check: '<path d="m5 12 5 5 9-10"/>'
-};
-const icon = (n) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ""}</svg>`;
-function hydrateIcons(root = document) { root.querySelectorAll("svg[data-icon]").forEach((el) => { el.outerHTML = icon(el.dataset.icon); }); }
-
-let emblemSeq = 0;
-function emblem(rp, cls = "") {
-  const r = typeof rp === "number" ? rankFor(rp) : rp, t = r.tier, id = "em" + (++emblemSeq);
-  let mark;
-  if (t.id === "rookie") mark = '<circle cx="32" cy="33" r="6" fill="#fff" opacity=".9"/>';
-  else if (t.id === "legend") mark = '<path d="m32 18 4.2 8.6 9.5 1.4-6.9 6.7 1.6 9.4L32 39.6l-8.4 4.5 1.6-9.4-6.9-6.7 9.5-1.4z" fill="#fff"/>';
-  else {
-    const n = r.div, top = 33 - (n - 1) * 4.5;
-    mark = Array.from({ length: n }, (_, i) => `<path d="M22 ${top + i * 9 + 4}l10-7 10 7" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`).join("");
-  }
-  return `<span class="emblem ${cls}" style="--tc:${t.color}" title="${esc(r.name)}"><svg viewBox="0 0 64 64" aria-hidden="true">
-    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${t.color}"/><stop offset="1" stop-color="${t.deep}"/></linearGradient></defs>
-    <path d="M32 3 57 16v24L32 61 7 40V16z" fill="url(#${id})"/>
-    <path d="M32 9 51 19v19L32 55 13 38V19z" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/>
-    ${mark}</svg></span>`;
-}
-
-function toast(msg, kind = "") {
-  const el = document.createElement("div");
-  el.className = "toast " + kind; el.textContent = msg;
-  $("#toasts").appendChild(el);
-  setTimeout(() => { el.style.transition = "opacity .3s"; el.style.opacity = "0"; setTimeout(() => el.remove(), 300); }, kind === "bad" ? 4200 : 2600);
-}
+const exName = (k) => EXERCISES[k].name.toLowerCase();
 
 // ------------------------------------------------------------------ state
 const backend = createBackend(cfg);
@@ -109,9 +59,10 @@ function renderHeader() {
 function bumpGrit() { const p = $("#hGritPill"); p.classList.remove("pop"); void p.offsetWidth; p.classList.add("pop"); }
 
 function setMe(p) { if (!p) return; me = p; renderHeader(); renderView(); }
+const appCtx = { backend, me: () => me, setMe: (p) => { me = p; renderHeader(); if (view === "train" || view === "store" || view === "me") renderView(); } };
 
 // ------------------------------------------------------------------ routing
-const VIEWS = ["train", "ranks", "store", "me"];
+const VIEWS = ["train", "hub", "quests", "ranks", "store", "me"];
 function go(v, push = true) {
   if (!VIEWS.includes(v)) v = "train";
   view = v;
@@ -121,6 +72,8 @@ function go(v, push = true) {
   window.scrollTo({ top: 0 });
   renderView();
   if (v === "ranks") loadBoard();
+  if (v === "hub" && me) loadHub(appCtx);
+  if (v === "quests" && me) loadQuests(appCtx);
 }
 function renderView() {
   if (!me) return;
@@ -141,7 +94,7 @@ function renderTrain() {
   $("#rcBar").style.width = (r.frac * 100).toFixed(1) + "%";
   $("#rcNext").textContent = r.next ? `${fmt(r.toNext)} RP to ${r.next.name}` : "Top rank. Defend it.";
 
-  const canDaily = me.last_daily !== todayUTC();
+  const canDaily = !me.last_daily || me.last_daily < localDay();
   $("#daily").hidden = !canDaily;
   if (canDaily) $("#dailyAmt").textContent = `+${50 + 10 * Math.min(me.streak, 10)} Grit` + (me.streak > 1 ? ` · ${me.streak}-day streak bonus` : "");
 
@@ -185,15 +138,19 @@ function setExercise(m) {
   if (count && !confirmSwitch) { confirmSwitch = true; toast("Switching resets this set. Tap again to switch."); setTimeout(() => confirmSwitch = false, 3000); return; }
   confirmSwitch = false;
   ex = m;
-  $("#exPush").setAttribute("aria-pressed", m === "push"); $("#exSit").setAttribute("aria-pressed", m === "sit");
+  for (const k of KINDS) $("#ex" + k[0].toUpperCase() + k.slice(1)).setAttribute("aria-pressed", m === k);
   tracker.setMode(m); resetSet();
-  if (!source) $("#coverText").textContent = m === "push"
-    ? "Put your phone down side-on, about 2 m away, so it sees your whole body."
-    : "Phone side-on at floor level, whole body in frame. Counts when your torso comes upright.";
+  if (!source) $("#coverText").textContent = COVER[m];
 }
 let confirmSwitch = false;
+const COVER = {
+  push: "Put your phone down side-on, about 2 m away, so it sees your whole body.",
+  sit: "Phone side-on at floor level, whole body in frame. Counts when your torso comes upright.",
+  squat: "Phone side-on at hip height, about 2.5 m away, head to feet in frame. Counts when your knees bend past 90° and you stand tall."
+};
 $("#exPush").addEventListener("click", () => setExercise("push"));
 $("#exSit").addEventListener("click", () => setExercise("sit"));
+$("#exSquat").addEventListener("click", () => setExercise("squat"));
 
 function showCover(text, isErr) {
   $("#cover").hidden = false; $("#liveTag").hidden = true; stage.classList.remove("tapmode");
@@ -227,7 +184,7 @@ function stopCounting() {
   if (source === "cam") tracker.stop();
   source = null;
   try { wake?.release(); } catch (e) {}
-  showCover(count ? "Paused. Finish the set to bank it, or start again to keep counting." : "Put your phone down side-on, about 2 m away, so it sees your whole body.");
+  showCover(count ? "Paused. Finish the set to bank it, or start again to keep counting." : COVER[ex]);
 }
 
 function addRep() {
@@ -265,6 +222,7 @@ $("#finishBtn").addEventListener("click", async () => {
     resetSet();
     showReward(before, res, { kind, reps, secs });
     renderTrain();
+    refreshQuestBadge(appCtx);
   } catch (e) { toast(e.message || String(e), "bad"); }
   busy = false; refreshSetButtons();
 });
@@ -272,14 +230,9 @@ $("#finishBtn").addEventListener("click", async () => {
 async function loadRecent() {
   try {
     const rows = await backend.recentSets();
-    $("#recent").innerHTML = rows.length ? rows.map((s) => `<li><span><b>${s.reps}</b> ${s.kind === "push" ? "push-ups" : "sit-ups"}${s.source === "tap" ? '<span class="tag">TAP</span>' : ""}</span><span>+${s.grit} Grit · ${relTime(s.created_at)}</span></li>`).join("")
+    $("#recent").innerHTML = rows.length ? rows.map((s) => `<li><span><b>${s.reps}</b> ${exName(s.kind)}${s.source === "tap" ? '<span class="tag">TAP</span>' : ""}</span><span>+${s.grit} Grit · ${relTime(s.created_at)}</span></li>`).join("")
       : `<li class="empty">No sets yet. Your first one unlocks the “First Rep” title.</li>`;
   } catch (e) { $("#recent").innerHTML = `<li class="empty">Couldn’t load recent sets.</li>`; }
-}
-function relTime(iso) {
-  const s = (Date.now() - new Date(iso)) / 1000;
-  if (s < 60) return "just now"; if (s < 3600) return Math.floor(s / 60) + "m ago"; if (s < 86400) return Math.floor(s / 3600) + "h ago";
-  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 $("#daily").addEventListener("click", async () => {
@@ -290,17 +243,20 @@ $("#daily").addEventListener("click", async () => {
 // ------------------------------------------------------------------ reward sheet
 function showReward(before, res, set) {
   const e = res.earned, r0 = rankFor(before.rp), r1 = rankFor(me.rp), L0 = levelFor(before.xp).level, L1 = levelFor(me.xp).level;
-  const promoted = r1.i > r0.i;
+  const promoted = r1.i > r0.i, recs = res.records || [];
+  const recHtml = recs.map((r) => { const m = recordMeta(r.key), f = (v) => m.unit === "time" ? clock(v) : fmt(v);
+    return `<div class="record-hit"><span class="rh-tag">New record</span><b>${esc(m.label)}</b><span class="rh-vals"><s>${f(r.prev)}</s>${icon("chev")}<strong>${f(r.value)}</strong></span></div>`; }).join("");
   const unlocks = (res.unlocks || []).map((id) => `<div class="unlock">${icon("star")}<div><b>${esc(titleName(id))}</b><small>New title unlocked · +100 Grit</small></div><button class="btn sm" data-equip="${id}" type="button">Equip</button></div>`).join("");
   const sheet = $("#sheet");
   sheet.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rwTitle">
-    <h2 id="rwTitle">${promoted ? "Ranked up" : "Set banked"}</h2>
-    <p class="lead">${set.reps} ${set.kind === "push" ? "push-ups" : "sit-ups"} in ${clock(set.secs)}</p>
+    <h2 id="rwTitle">${promoted ? "Ranked up" : recs.length ? "New record" : "Set banked"}</h2>
+    <p class="lead">${set.reps} ${exName(set.kind)} in ${clock(set.secs)}</p>
     <div class="earn">
       <div class="g"><b class="num" data-to="${e.grit + (e.bonus || 0)}">0</b><span>Grit</span></div>
       <div><b class="num" data-to="${e.xp}">0</b><span>XP</span></div>
       <div class="r"><b class="num" data-to="${e.rp}">0</b><span>Rank pts</span></div>
     </div>
+    ${recHtml}
     ${promoted ? `<div class="promo" style="--tc:${r1.tier.color}">${emblem(r1, "lg")}<div><b>${esc(r1.name)}</b><small>Promoted from ${esc(r0.name)}</small></div></div>` : ""}
     ${L1 > L0 ? `<div class="unlock" style="border-color:var(--accent)">${icon("bolt")}<div><b>Level ${L1}</b><small>You levelled up</small></div></div>` : ""}
     ${unlocks}
@@ -322,7 +278,7 @@ function countUp(el, to) {
   requestAnimationFrame(step);
 }
 $("#sheet").addEventListener("click", async (e) => {
-  if (e.target.id === "sheet" || e.target.id === "rwClose") { $("#sheet").hidden = true; return; }
+  if (e.target.id === "sheet" || e.target.id === "rwClose" || e.target.closest("[data-close]")) { closeSheet(); return; }
   const eq = e.target.closest("[data-equip]");
   if (eq) { await equip(eq.dataset.equip); eq.outerHTML = `<span class="meta on">Equipped</span>`; }
 });
@@ -461,7 +417,7 @@ function renderMe() {
     <div class="hero-body"><span class="hero-name">${esc(me.username)}</span><span class="hero-title">${esc(titleName(me.title))}</span>
     <div class="hero-lvl"><span>Lv ${L.level}</span><div class="bar"><i style="width:${(L.frac * 100).toFixed(1)}%"></i></div><span class="num">${fmt(L.into)}/${fmt(L.need)} XP</span></div></div>
     ${emblem(r)}`;
-  const stats = [["Total reps", me.total_push + me.total_sit], ["Push-ups", me.total_push], ["Sit-ups", me.total_sit], ["Best set", me.best_set], ["Sets", me.sets_count], ["Day streak", me.streak]];
+  const stats = [["Total reps", me.total_reps ?? me.total_push + me.total_sit + (me.total_squat || 0)], ["Push-ups", me.total_push], ["Sit-ups", me.total_sit], ["Squats", me.total_squat || 0], ["Best set", me.best_set], ["Sets", me.sets_count], ["Day streak", me.streak], ["Quests done", me.quests_done || 0], ["Rest days", me.rest_count || 0]];
   $("#stats").innerHTML = stats.map(([k, v]) => `<div class="panel stat"><b>${fmt(v)}</b><span>${k}</span></div>`).join("");
 
   $("#titleLocker").innerHTML = ITEMS.filter((i) => i.kind === "title").map((it) => {
@@ -531,8 +487,19 @@ setInterval(pollSpotify, 5000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) pollSpotify(); });
 
 // ------------------------------------------------------------------ boot
+async function syncTimezone() {
+  // Days (quests, streaks, calendar) reset at the player's local midnight.
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (backend.mode === "online" && tz && me && me.tz !== tz) { const p = await backend.setTimezone(tz); if (p) me = p; }
+  } catch (e) { /* changed recently: keep the saved zone */ }
+}
 async function boot() {
   hydrateIcons();
+  bindHub(); bindQuests();
+  const net = backend.mode === "online";
+  $("#navNet").textContent = net ? "Live leaderboards" : "Local mode";
+  $("#navNet").classList.toggle("on", net);
   try { if (await spotify.handleRedirect()) toast("Spotify connected", "good"); } catch (e) { toast(e.message, "bad"); }
   try { me = await backend.init(); }
   catch (e) { toast("Couldn’t reach the leaderboard server: " + e.message, "bad"); }
@@ -540,8 +507,9 @@ async function boot() {
     $("#onboard").hidden = false;
     if (backend.mode === "local") $("#obNote").textContent = "3-16 letters, numbers or underscores. Local mode: progress stays on this device.";
     setTimeout(() => $("#obName").focus(), 50);
-  } else renderHeader();
+  } else { await syncTimezone(); renderHeader(); }
   go(location.hash.slice(1) || "train", false);
+  if (me) refreshQuestBadge(appCtx);
   pollSpotify();
 }
 $("#onboardForm").addEventListener("submit", async (e) => {
@@ -549,7 +517,7 @@ $("#onboardForm").addEventListener("submit", async (e) => {
   const btn = $("#obGo"); btn.disabled = true; btn.textContent = "Creating…";
   try {
     me = await backend.createProfile($("#obName").value.trim());
-    $("#onboard").hidden = true; renderHeader(); go("train");
+    $("#onboard").hidden = true; await syncTimezone(); renderHeader(); go("train"); refreshQuestBadge(appCtx);
     toast(`Welcome, ${me.username}. 150 Grit to start.`, "good");
   } catch (err) { toast(err.message, "bad"); }
   btn.disabled = false; btn.textContent = "Start training";

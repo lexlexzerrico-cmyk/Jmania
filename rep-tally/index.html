@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rep Tally Cam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap">
+<style>
+/* Layout: camera stage with skeleton overlay and a giant rep count, controls under it, today's sets below. */
+:root {
+  --bg: #e9edf1; --surface: #f7f9fb; --ink: #131c26; --muted: #5b6878; --line: #cfd7e0;
+  --push: #2242d6; --sit: #c2410c; --accent: var(--push); --on-accent: #ffffff;
+  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --label: "Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e1319; --surface: #171e27; --ink: #e7ecf2; --muted: #93a0b0; --line: #2a3441;
+    --push: #5b78ff; --sit: #f07a3c; --on-accent: #0b0f14; color-scheme: dark; }
+}
+body.sit { --accent: var(--sit); }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: max(16px, env(safe-area-inset-top, 0px)); padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+.app { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--display); font-weight: 900; font-size: 2rem; text-transform: uppercase; margin: 0; line-height: 1; }
+.today { font-family: var(--label); color: var(--muted); font-variant-numeric: tabular-nums; }
+.today b { color: var(--ink); }
+.switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.switch button { font-family: var(--label); font-weight: 600; font-size: 1rem; letter-spacing: .06em; text-transform: uppercase; border: 0; border-radius: 9px; padding: 10px 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.switch button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.stage { position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 62vh; border-radius: 20px; overflow: hidden; background: #0b0f14; }
+.stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.stage.mirror video, .stage.mirror canvas { transform: scaleX(-1); }
+.hud { position: absolute; left: 14px; top: 10px; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.55); }
+.count { font-family: var(--display); font-weight: 900; font-size: clamp(5rem, 22vw, 8.5rem); line-height: .85; font-variant-numeric: tabular-nums; }
+.phase { font-family: var(--label); font-weight: 600; letter-spacing: .1em; text-transform: uppercase; font-size: .9rem; }
+.meter { position: absolute; right: 14px; top: 14px; bottom: 14px; width: 12px; border-radius: 6px; background: rgba(255,255,255,.22); overflow: hidden; }
+.meter div { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; background: var(--accent); transition: height .08s linear; }
+.cover { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 20px; text-align: center; color: #e7ecf2; background: rgba(11,15,20,.82); }
+.cover p { margin: 0; max-width: 34ch; text-wrap: balance; }
+.btn { font-family: var(--label); font-weight: 600; font-size: 1.05rem; letter-spacing: .05em; text-transform: uppercase; border-radius: 12px; padding: 13px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.btn.go { background: var(--accent); color: var(--on-accent); border-color: var(--accent); padding: 14px 28px; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn:focus-visible, .switch button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.actions { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 8px; }
+.tip { margin: 0; color: var(--muted); font-size: .92rem; }
+label.voice { display: flex; gap: 8px; align-items: center; font-size: .92rem; color: var(--muted); }
+section { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+h2 { font-family: var(--label); font-weight: 600; font-size: .85rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+ul { list-style: none; margin: 0; padding: 0; }
+li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+li:first-child { border-top: 0; }
+li span:last-child { color: var(--muted); }
+.empty { color: var(--muted); border: 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Rep Tally</h1>
+    <div class="today" id="today"></div>
+  </header>
+
+  <div class="switch" role="group" aria-label="Exercise">
+    <button id="mPush" type="button" aria-pressed="true">Push-ups</button>
+    <button id="mSit" type="button" aria-pressed="false">Sit-ups</button>
+  </div>
+
+  <div class="stage mirror" id="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="hud"><div class="count" id="count">0</div><div class="phase" id="phase">Ready</div></div>
+    <div class="meter" aria-hidden="true"><div id="meter"></div></div>
+    <div class="cover" id="cover">
+      <p id="coverText">Prop your phone up so the camera sees your whole body from the side, about 2 metres away.</p>
+      <button class="btn go" id="start" type="button">Start camera</button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn" id="flip" type="button">Flip</button>
+    <button class="btn" id="undo" type="button">−1</button>
+    <button class="btn primary" id="save" type="button">Save set</button>
+  </div>
+  <label class="voice"><input type="checkbox" id="voice" checked> Say each rep out loud</label>
+  <p class="tip" id="tip"></p>
+
+  <section>
+    <h2>Today’s sets</h2>
+    <ul id="sets"></ul>
+  </section>
+</div>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const $ = (id) => document.getElementById(id);
+const video = $("video"), canvas = $("canvas"), ctx = canvas.getContext("2d");
+const TIPS = {
+  push: "Camera side-on at floor height. Counts when your elbows bend past 90° and lock out again.",
+  sit: "Camera side-on, whole body in frame. Counts when your torso rises from the floor to upright."
+};
+const LS = "rep-tally-cam-sets-v1";
+
+let mode = "push", count = 0, state = "up", smooth = null, facing = "user";
+let landmarker = null, stream = null, running = false, lastVideoTime = -1, audio = null;
+let sets = [];
+try { sets = JSON.parse(localStorage.getItem(LS) || "[]"); } catch (e) { sets = []; }
+
+// ---------- geometry ----------
+function pt(l, i) { return { x: l[i].x * canvas.width, y: l[i].y * canvas.height, v: l[i].visibility ?? 1 }; }
+function angle(a, b, c) {
+  const ab = Math.atan2(a.y - b.y, a.x - b.x), cb = Math.atan2(c.y - b.y, c.x - b.x);
+  let d = Math.abs((ab - cb) * 180 / Math.PI);
+  return d > 180 ? 360 - d : d;
+}
+function tiltFromHorizontal(a, b) { // 0 = flat, 90 = upright
+  return Math.abs(Math.atan2(Math.abs(a.y - b.y), Math.abs(a.x - b.x)) * 180 / Math.PI);
+}
+function pickSide(l) {
+  const L = [11, 13, 15, 23, 25], R = [12, 14, 16, 24, 26];
+  const vis = (ids) => ids.reduce((s, i) => s + (l[i].visibility ?? 0), 0);
+  return vis(L) >= vis(R) ? { sh: 11, el: 13, wr: 15, hip: 23, kn: 25 } : { sh: 12, el: 14, wr: 16, hip: 24, kn: 26 };
+}
+
+// ---------- rep logic ----------
+function update(l) {
+  const s = pickSide(l);
+  const sh = pt(l, s.sh), el = pt(l, s.el), wr = pt(l, s.wr), hip = pt(l, s.hip);
+  const needed = mode === "push" ? [sh, el, wr, hip] : [sh, hip];
+  if (needed.some((p) => p.v < 0.5)) { setPhase("Can’t see you — step back"); setMeter(0); return; }
+
+  if (mode === "push") {
+    const elbow = angle(sh, el, wr);
+    smooth = smooth == null ? elbow : smooth * 0.5 + elbow * 0.5;
+    const flat = tiltFromHorizontal(sh, hip) < 50;
+    setMeter((160 - smooth) / 75);
+    if (!flat) { setPhase("Get into plank"); return; }
+    if (state === "up" && smooth < 95) { state = "down"; setPhase("Push up"); }
+    else if (state === "down" && smooth > 150) { state = "up"; rep(); setPhase("Go down"); }
+    else if (state === "up") setPhase("Go down");
+  } else {
+    const torso = tiltFromHorizontal(sh, hip);
+    smooth = smooth == null ? torso : smooth * 0.5 + torso * 0.5;
+    setMeter((smooth - 20) / 50);
+    if (state === "up" && smooth < 30) { state = "down"; setPhase("Sit up"); }
+    else if (state === "down" && smooth > 65) { state = "up"; rep(); setPhase("Lie back"); }
+  }
+}
+
+function rep() {
+  count++;
+  $("count").textContent = count;
+  refreshButtons();
+  try { navigator.vibrate && navigator.vibrate(30); } catch (e) {}
+  if ($("voice").checked && "speechSynthesis" in window) {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(count)); u.rate = 1.2; speechSynthesis.speak(u);
+  } else beep();
+}
+function beep() {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.frequency.value = 880; g.gain.setValueAtTime(0.2, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.12);
+    o.connect(g); g.connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.13);
+  } catch (e) {}
+}
+function setPhase(t) { $("phase").textContent = t; }
+function setMeter(f) { $("meter").style.height = Math.max(0, Math.min(1, f)) * 100 + "%"; }
+
+// ---------- drawing ----------
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+function draw(l) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!l) return;
+  const col = getComputedStyle(document.body).getPropertyValue("--accent").trim() || "#5b78ff";
+  ctx.lineWidth = Math.max(3, canvas.width / 160); ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(255,255,255,.9)";
+  for (const [a, b] of BONES) {
+    if ((l[a].visibility ?? 1) < 0.4 || (l[b].visibility ?? 1) < 0.4) continue;
+    ctx.beginPath(); ctx.moveTo(l[a].x * canvas.width, l[a].y * canvas.height); ctx.lineTo(l[b].x * canvas.width, l[b].y * canvas.height); ctx.stroke();
+  }
+  const s = pickSide(l), key = mode === "push" ? [s.sh, s.el, s.wr] : [s.sh, s.hip, s.kn];
+  ctx.fillStyle = col;
+  for (const i of key) { ctx.beginPath(); ctx.arc(l[i].x * canvas.width, l[i].y * canvas.height, ctx.lineWidth * 2.2, 0, Math.PI * 2); ctx.fill(); }
+}
+
+// ---------- camera + model ----------
+async function loadModel() {
+  const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  const opts = (delegate) => ({
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task", delegate },
+    runningMode: "VIDEO", numPoses: 1
+  });
+  try { return await PoseLandmarker.createFromOptions(files, opts("GPU")); }
+  catch (e) { return await PoseLandmarker.createFromOptions(files, opts("CPU")); }
+}
+
+async function startCamera() {
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 960 }, height: { ideal: 720 } }, audio: false });
+  video.srcObject = stream;
+  await video.play();
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  $("stage").classList.toggle("mirror", facing === "user");
+}
+
+async function start() {
+  const btn = $("start");
+  btn.disabled = true;
+  try {
+    $("coverText").textContent = "Opening camera…";
+    await startCamera();
+    $("coverText").textContent = "Loading body tracking…";
+    landmarker = landmarker || await loadModel();
+    $("cover").hidden = true;
+    running = true;
+    try { await navigator.wakeLock?.request("screen"); } catch (e) {}
+    loop();
+  } catch (e) {
+    btn.disabled = false;
+    $("coverText").textContent = e && e.name === "NotAllowedError"
+      ? "Camera blocked. Allow camera access for this page in your browser settings, then tap Start again."
+      : "Couldn’t start: " + (e && e.message ? e.message : e) + ". Check your connection and try again.";
+  }
+}
+
+function loop() {
+  if (!running) return;
+  if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    const res = landmarker.detectForVideo(video, performance.now());
+    const l = res.landmarks && res.landmarks[0];
+    draw(l);
+    if (l) update(l); else { setPhase("Step into frame"); setMeter(0); }
+  }
+  requestAnimationFrame(loop);
+}
+
+// ---------- sets ----------
+function dayKey(ms) { const d = new Date(ms); return d.toDateString(); }
+function renderSets() {
+  const today = dayKey(Date.now());
+  const t = sets.filter((s) => dayKey(s.at) === today).sort((a, b) => b.at - a.at);
+  const p = t.filter((s) => s.kind === "push").reduce((a, s) => a + s.reps, 0);
+  const u = t.filter((s) => s.kind === "sit").reduce((a, s) => a + s.reps, 0);
+  $("today").innerHTML = `Today: <b>${p}</b> push-ups · <b>${u}</b> sit-ups`;
+  $("sets").innerHTML = t.length
+    ? t.map((s) => `<li><span><b>${s.reps}</b> ${s.kind === "push" ? "push-ups" : "sit-ups"}</span><span>${new Date(s.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></li>`).join("")
+    : `<li class="empty">No sets yet. Start the camera and go.</li>`;
+}
+function refreshButtons() { $("undo").disabled = count === 0; $("save").disabled = count === 0; }
+function resetCounter() { count = 0; state = mode === "push" ? "up" : "up"; smooth = null; $("count").textContent = 0; refreshButtons(); }
+
+function setMode(m) {
+  mode = m; document.body.classList.toggle("sit", m === "sit");
+  $("mPush").setAttribute("aria-pressed", m === "push"); $("mSit").setAttribute("aria-pressed", m === "sit");
+  $("tip").textContent = TIPS[m]; resetCounter(); setPhase(running ? "Ready" : "Ready");
+}
+
+$("start").addEventListener("click", start);
+$("mPush").addEventListener("click", () => setMode("push"));
+$("mSit").addEventListener("click", () => setMode("sit"));
+$("undo").addEventListener("click", () => { if (count) { count--; $("count").textContent = count; refreshButtons(); } });
+$("save").addEventListener("click", () => {
+  if (!count) return;
+  sets.push({ kind: mode, reps: count, at: Date.now() });
+  try { localStorage.setItem(LS, JSON.stringify(sets)); } catch (e) {}
+  resetCounter(); renderSets();
+});
+$("flip").addEventListener("click", async () => {
+  facing = facing === "user" ? "environment" : "user";
+  if (running) { try { await startCamera(); } catch (e) {} }
+});
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && running) { try { await navigator.wakeLock?.request("screen"); } catch (e) {} }
+});
+
+setMode("push"); renderSets(); refreshButtons();
+</script>
+</body>
+</html>

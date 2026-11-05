@@ -5,9 +5,11 @@ Count push-ups and sit-ups with your phone camera, earn **Grit**, climb from **R
 - **Train**: camera body tracking counts push-ups, sit-ups and squats (or tap to count, for half rewards). Set timer, voice count, live rank card, daily drop, active boosts.
 - **Hub**: today / week / month / lifetime reps, rank, level, Grit, streak, an activity chart (7 days, 30 days, 12 weeks, with a table view), consistency, personal records with history, a training calendar with per-day detail, recent achievements and workouts.
 - **Quests**: a daily check-in plus 3 rotating daily quests, and 5 weekly quests. Rewards are claimed once per period and checked by the server. Rest days (up to 2 a week) keep your streak and count for the check-in.
+- **Progression**: a four-branch skill tree (Discipline, Strength, Experience, Mastery) paid for with skill points (one per level), and 24 achievements across six categories, each with progress and rewards.
+- **Customisation**: frames, avatars, name effects, rank effects, animated profile backgrounds, themes and titles, earned from achievements and skills or bought with Grit. Pin up to 3 achievements to your profile showcase.
 - **Ranks**: public leaderboards for this week, rank points, push-ups, sit-ups and all reps, with a podium and your own position pinned.
-- **Store**: boosts (Double Grit, XP Surge, Rank Rush, Streak Shield), titles and color themes.
-- **Profile**: stats, title and theme locker, the full rank ladder, settings, account.
+- **Store**: boosts, titles, frames, avatars, name and rank effects, backgrounds and themes, each with a rarity (Common to Legendary). Tap any item to preview it on your own profile; buying takes two taps. No real money, no random loot.
+- **Profile**: your card with equipped cosmetics, showcase, stats, a locker to equip or unequip everything you own, the rank ladder, settings and account.
 - **Spotify**: shows what's playing with play/pause/skip, and pays +10% Grit while music plays.
 
 Live at `https://lexlexzerrico-cmyk.github.io/Jmania/repforge/` once GitHub Pages is on (see the bottom of this file).
@@ -61,6 +63,7 @@ The body-tracking files are shared with the simpler counter in [`../rep-tally/me
 
 - **Daily drop:** 50 Grit + 10 per streak day (up to +100).
 - **Titles you earn:** each gives +100 Grit (First Rep, Half Century, Centurion, Thousand Club, Ten-K Machine, Week Warrior, Iron Habit, Gilded, Living Legend, Questbound, Restwise, Record Breaker).
+- **Skill points:** one per level after the first; 36 points unlock the whole tree. Skills are permanent, and every bonus is a percentage or a one-off unlock, so none of them asks for more reps.
 - **Personal records:** most push-ups / sit-ups / squats in one set (camera only), best day, best week, longest session (sets less than 15 minutes apart), most training days in a week.
 - **Ranks:** Rookie → Bronze → Silver → Gold → Platinum → Diamond → Titan (three divisions each) → Legend at 14,000 RP.
 - **Changing prices, items or quests:** edit both `js/catalog.js` and the matching `insert` list in `supabase/schema.sql`, then re-run the SQL.

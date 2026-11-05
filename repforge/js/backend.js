@@ -1,7 +1,7 @@
 // Two interchangeable backends with the same methods:
 //   Supabase (public, shared leaderboards) when config.js has keys, otherwise Local (this device only).
 // Local mirrors the server rules in supabase/schema.sql so the game plays the same offline.
-import { item, EARNED_TITLES, EXERCISES, KINDS, QUESTS } from "./catalog.js";
+import { item, ITEMS, EXERCISES, KINDS, QUESTS, ACHIEVEMENTS, achievement, skill, has, spFree, showcaseSlots, cosmeticsOwned, levelFor, owns } from "./catalog.js";
 
 const BOARDS = {
   weekly: { label: "This week", col: "reps" },
@@ -13,19 +13,22 @@ const BOARDS = {
 };
 export { BOARDS };
 
-const PUBLIC_COLS = "id,username,title,theme,rp,total_push,total_sit,total_squat,total_reps,best_set,streak";
+const PUBLIC_COLS = "id,username,title,theme,rp,total_push,total_sit,total_squat,total_reps,best_set,streak,avatar,frame,namefx,rankfx";
 
 function boostOn(boosts, k) { const v = boosts?.[k]; return typeof v === "string" && new Date(v).getTime() > Date.now(); }
 
 // Same maths as submit_set() in schema.sql — used for previews in both modes.
 export function previewEarn(p, { kind, reps, source, music }) {
-  const tap = source === "tap" ? 0.5 : 1;
+  const cam = source !== "tap", tap = cam ? 1 : 0.5;
   return {
-    rp: Math.round(reps * (EXERCISES[kind]?.rp ?? 1) * tap * (boostOn(p.boosts, "rankrush") ? 1.25 : 1)),
-    xp: reps * 2 * (boostOn(p.boosts, "xpsurge") ? 2 : 1),
-    grit: Math.round(reps * tap * (boostOn(p.boosts, "grit2x") ? 2 : 1) * (music ? 1.1 : 1))
+    rp: Math.round(reps * (EXERCISES[kind]?.rp ?? 1) * tap * (boostOn(p.boosts, "rankrush") ? 1.25 : 1) * (cam && has(p, "s3") ? 1.1 : 1)),
+    xp: Math.round(reps * 2 * (boostOn(p.boosts, "xpsurge") ? 2 : 1) * (1 + (has(p, "e1") ? 0.1 : 0) + (has(p, "e3") ? 0.1 : 0))),
+    grit: Math.round(reps * tap * (boostOn(p.boosts, "grit2x") ? 2 : 1) * (music ? 1.1 : 1) * (cam && has(p, "s1") ? 1.1 : 1))
   };
 }
+// Quest rewards after skills (mirror of _quest_grit / _quest_xp).
+export const questGrit = (p, q) => Math.round(q.grit * (q.id === "d_checkin" && has(p, "d1") ? 1.5 : 1) * (has(p, "d3") ? 1.1 : 1));
+export const questXp = (p, q) => Math.round(q.xp * (has(p, "e2") ? 1.25 : 1));
 export { boostOn };
 
 // ---- calendar-day helpers (YYYY-MM-DD strings; maths done in UTC so DST never shifts a day)
@@ -40,7 +43,8 @@ class LocalBackend {
 
   _load() {
     let d; try { d = JSON.parse(localStorage.getItem(this.KEY)) || null; } catch (e) { d = null; }
-    if (d && d.v !== 2) this._upgrade(d);
+    if (d && !d.v) this._upgrade(d);
+    if (d && d.v === 2) this._upgrade3(d);
     return d;
   }
   // v1 local saves -> v2: number sets, add days/sessions, new counters, records from history.
@@ -66,6 +70,16 @@ class LocalBackend {
       const bc = top(byWeek, (x) => x.days); if (bc) d.records.push({ key: "week_days", value: bc[1].days, prev: 0, period: bc[0], day: bc[0], at: Date.parse(bc[0]) });
     }
     d.v = 2; this._save(d);
+  }
+  // v2 -> v3: cosmetic slots, skills, and unlock rows for titles earned before achievements existed.
+  _upgrade3(d) {
+    const p = d.profile;
+    Object.assign(p, { skills: p.skills || [], frame: p.frame || "none", namefx: p.namefx || "none", rankfx: p.rankfx || "none",
+      background: p.background || "none", avatar: p.avatar || "a_letter", showcase: p.showcase || [] });
+    for (const a of ACHIEVEMENTS) if (p.inventory.includes(a.id) && !d.unlocks.some((u) => u.item_id === a.id))
+      d.unlocks.push({ item_id: a.id, source: "legacy", local_day: localDay(), at: Date.now() });
+    for (const u of d.unlocks) for (const it of ITEMS) if (it.granted_by === u.item_id && !p.inventory.includes(it.id)) p.inventory.push(it.id);
+    d.v = 3; this._save(d);
   }
   _save(d) { try { localStorage.setItem(this.KEY, JSON.stringify(d)); } catch (e) {} }
   _need() { const d = this._load(); if (!d) throw new Error("Create your player name first"); return d; }
@@ -108,9 +122,29 @@ class LocalBackend {
     else p.streak = 1;
     p.last_active = today;
   }
+  // Unlock an achievement or skill reward once: log it, pay its Grit, grant the items it unlocks.
   _unlock(d, id, src, today) {
-    const p = d.profile; if (p.inventory.includes(id)) return false;
-    p.inventory.push(id); p.grit += 100; d.unlocks.push({ item_id: id, source: src, local_day: today, at: Date.now() }); return true;
+    const p = d.profile; if (d.unlocks.some((u) => u.item_id === id)) return false;
+    d.unlocks.push({ item_id: id, source: src, local_day: today, at: Date.now() });
+    for (const it of ITEMS) if (it.granted_by === id && !p.inventory.includes(it.id)) p.inventory.push(it.id);
+    const a = achievement(id); if (a) p.grit += a.grit + (has(p, "s2") ? 50 : 0);
+    return true;
+  }
+  _achDue(d, today) {
+    const p = d.profile, tot = p.total_push + p.total_sit + p.total_squat, todays = d.sets.filter((s) => s.local_day === today);
+    const hour = (s) => new Date(s.at).getHours();
+    const test = { first_set: p.sets_count >= 1, fifty: p.best_set >= 50, century: p.best_set >= 100,
+      triple: new Set(todays.map((s) => s.kind)).size === 3, dawn: todays.some((s) => hour(s) < 7), night: todays.some((s) => hour(s) >= 22),
+      k1: tot >= 1000, k10: tot >= 10000, push500: p.total_push >= 500, sit500: p.total_sit >= 500, squat500: p.total_squat >= 500,
+      streak7: p.streak >= 7, streak30: p.streak >= 30, restwise: p.rest_count >= 5, questbound: p.quests_done >= 25, questmaster: p.quests_done >= 100,
+      recordbreaker: p.records_count >= 5, gilded: p.rp >= 1750, legend: p.rp >= 14000, level10: levelFor(p.xp).level >= 10, level25: levelFor(p.xp).level >= 25,
+      apprentice: p.skills.length >= 1, capstone: p.skills.some((id) => skill(id)?.tier === 5), collector: cosmeticsOwned(p) >= 10 };
+    return ACHIEVEMENTS.filter((a) => test[a.id] && !d.unlocks.some((u) => u.item_id === a.id) && !p.inventory.includes(a.id)).map((a) => a.id);
+  }
+  _award(d, today, src) {
+    const out = [];
+    for (let pass = 0; pass < 2; pass++) for (const id of this._achDue(d, today)) if (this._unlock(d, id, src, today)) out.push(id);
+    return out;
   }
 
   async init() { const d = this._load(); return d ? this._fix(d.profile) : null; }
@@ -121,8 +155,9 @@ class LocalBackend {
     if (d) { d.profile.username = username; this._save(d); return this._fix(d.profile); }
     const profile = { id: "local", username, title: "rookie", theme: "ember", grit: 150, xp: 0, rp: 0,
       total_push: 0, total_sit: 0, total_squat: 0, best_set: 0, sets_count: 0, streak: 0, last_active: null, last_daily: null,
-      inventory: ["rookie", "ember"], boosts: {}, quests_done: 0, rest_count: 0, records_count: 0, tz: "local" };
-    this._save({ v: 2, profile, sets: [], rests: [], claims: [], unlocks: [], records: [] });
+      inventory: ["rookie", "ember"], boosts: {}, quests_done: 0, rest_count: 0, records_count: 0, tz: "local",
+      skills: [], frame: "none", namefx: "none", rankfx: "none", background: "none", avatar: "a_letter", showcase: [] };
+    this._save({ v: 3, profile, sets: [], rests: [], claims: [], unlocks: [], records: [] });
     return this._fix(profile);
   }
   async submitSet({ kind, reps, secs, source, music }) {
@@ -151,33 +186,33 @@ class LocalBackend {
     rec("session_secs", Math.round((Date.now() - session_start) / 1000), String(session_start));
     rec("week_days", this._metric(d, "days", wk, addDays(wk, 6)), wk);
     p.records_count += recs.length;
-
-    const total = p.total_push + p.total_sit + p.total_squat, unlocks = [];
-    const test = { first_set: true, fifty: reps >= 50, century: reps >= 100, k1: total >= 1000, k10: total >= 10000,
-      streak7: p.streak >= 7, streak30: p.streak >= 30, gilded: p.rp >= 1750, legend: p.rp >= 14000, recordbreaker: p.records_count >= 5 };
-    for (const t of EARNED_TITLES) if (test[t] && this._unlock(d, t, "set", today)) unlocks.push(t);
+    const g0 = p.grit;
+    if (has(p, "s4")) p.grit += 50 * recs.length;     // Record Bounty
+    if (has(p, "e4")) p.xp += 100 * recs.length;      // Record Keeper
+    const unlocks = this._award(d, today, "set");
     this._save(d);
-    return { profile: this._fix(p), earned: { ...e, bonus: unlocks.length * 100 }, unlocks, records: recs };
+    return { profile: this._fix(p), earned: { ...e, bonus: p.grit - g0 }, unlocks, records: recs };
   }
   async logRestDay() {
     const d = this._need(), p = d.profile, today = this._today(), wk = weekStart(today);
     if (d.sets.some((s) => s.local_day === today)) throw new Error("You trained today already. Rest days are for days off.");
     if (d.rests.includes(today)) throw new Error("Today is already a rest day");
-    if (d.rests.filter((r) => r >= wk && r <= addDays(wk, 6)).length >= 2) throw new Error("You can log up to 2 rest days a week");
+    const lim = has(p, "d4") ? 3 : 2;
+    if (d.rests.filter((r) => r >= wk && r <= addDays(wk, 6)).length >= lim) throw new Error(`You can log up to ${lim} rest days a week`);
     d.rests.push(today); this._streak(p, today); p.rest_count++;
-    const unlocks = p.rest_count >= 5 && this._unlock(d, "restwise", "rest", today) ? ["restwise"] : [];
+    const unlocks = this._award(d, today, "rest");
     this._save(d); return { profile: this._fix(p), unlocks };
   }
   async getQuests() {
     const d = this._need(), p = d.profile, today = this._today(), wk = weekStart(today);
     const quests = this._assigned(today).map((q) => {
       const [d0, d1] = q.period === "daily" ? [today, today] : [wk, addDays(wk, 6)];
-      return { ...q, progress: Math.min(this._metric(d, q.metric, d0, d1), q.target), claimed: d.claims.some((c) => c.quest_id === q.id && c.period_start === d0) };
+      return { ...q, xp: questXp(p, q), grit: questGrit(p, q), progress: Math.min(this._metric(d, q.metric, d0, d1), q.target), claimed: d.claims.some((c) => c.quest_id === q.id && c.period_start === d0) };
     });
     const midnight = (day) => { const [y, m, dd] = day.split("-").map(Number); return new Date(y, m - 1, dd).toISOString(); };
     return { today, week_start: wk, daily_reset: midnight(addDays(today, 1)), weekly_reset: midnight(addDays(wk, 7)), quests,
       quests_done: p.quests_done, trained_today: d.sets.some((s) => s.local_day === today), rested_today: d.rests.includes(today),
-      rest_this_week: d.rests.filter((r) => r >= wk && r <= addDays(wk, 6)).length };
+      rest_this_week: d.rests.filter((r) => r >= wk && r <= addDays(wk, 6)).length, rest_limit: has(p, "d4") ? 3 : 2 };
   }
   async claimQuest(id) {
     const d = this._need(), p = d.profile, today = this._today();
@@ -187,10 +222,11 @@ class LocalBackend {
     if (d.claims.some((c) => c.quest_id === id && c.period_start === d0)) throw new Error("Reward already claimed");
     const prog = this._metric(d, q.metric, d0, d1);
     if (prog < q.target) throw new Error(`Not finished yet (${prog} of ${q.target})`);
-    d.claims.push({ quest_id: id, period_start: d0, xp: q.xp, grit: q.grit, local_day: today, at: Date.now() });
-    p.xp += q.xp; p.grit += q.grit; p.quests_done++;
-    const unlocks = p.quests_done >= 25 && this._unlock(d, "questbound", "quest", today) ? ["questbound"] : [];
-    this._save(d); return { profile: this._fix(p), xp: q.xp, grit: q.grit, unlocks };
+    const xp = questXp(p, q), grit = questGrit(p, q);
+    d.claims.push({ quest_id: id, period_start: d0, xp, grit, local_day: today, at: Date.now() });
+    p.xp += xp; p.grit += grit; p.quests_done++;
+    const unlocks = this._award(d, today, "quest");
+    this._save(d); return { profile: this._fix(p), xp, grit, unlocks };
   }
   async dashboard() {
     const d = this._need(), today = this._today(), d0 = addDays(today, -399);
@@ -231,25 +267,60 @@ class LocalBackend {
   async claimDaily() {
     const d = this._need(), p = d.profile, today = this._today();
     if (p.last_daily && p.last_daily >= today) throw new Error("Daily drop already claimed. Come back tomorrow");
-    const amount = 50 + 10 * Math.min(p.streak, 10);
+    const amount = 50 + 10 * Math.min(p.streak, 10) + (has(p, "d5") ? 25 : 0);
     p.grit += amount; p.last_daily = today; this._save(d);
     return { profile: this._fix(p), amount };
   }
   async buy(id) {
-    const d = this._need(), p = d.profile, it = item(id);
+    const d = this._need(), p = d.profile, it = item(id), today = this._today();
     if (!it || it.price == null) throw new Error("That item is not for sale");
     if (p.grit < it.price) throw new Error("Not enough Grit yet");
     if (it.kind !== "boost") { if (p.inventory.includes(id)) throw new Error("You already own this"); p.inventory.push(id); }
-    else if (id === "shield") { const s = Number(p.boosts.shield || 0); if (s >= 3) throw new Error("You can hold up to 3 Streak Shields"); p.boosts.shield = s + 1; }
+    else if (id === "shield") { const s = Number(p.boosts.shield || 0), cap = has(p, "d2") ? 4 : 3; if (s >= cap) throw new Error(`You can hold up to ${cap} Streak Shields`); p.boosts.shield = s + 1; }
     else { const from = Math.max(Date.now(), new Date(p.boosts[id] || 0).getTime()); p.boosts[id] = new Date(from + it.minutes * 60000).toISOString(); }
-    p.grit -= it.price; this._save(d);
-    return { profile: this._fix(p) };
+    p.grit -= it.price;
+    const unlocks = this._award(d, today, "store");
+    this._save(d);
+    return { profile: this._fix(p), unlocks };
   }
   async equip(id) {
     const d = this._need(), p = d.profile, it = item(id);
-    if (!p.inventory.includes(id)) throw new Error("Unlock this first");
-    if (it.kind === "theme") p.theme = id; else if (it.kind === "title") p.title = id; else throw new Error("That can't be equipped");
-    this._save(d); return { profile: this._fix(p) };
+    if (!it) throw new Error("Unknown item");
+    if (!owns(p, id)) throw new Error("Unlock this first");
+    const field = { title: "title", theme: "theme", frame: "frame", namefx: "namefx", rankfx: "rankfx", background: "background", avatar: "avatar" }[it.kind];
+    if (!field) throw new Error("That can't be equipped");
+    p[field] = id; this._save(d); return { profile: this._fix(p) };
+  }
+  async unequip(slot) {
+    const d = this._need(), p = d.profile;
+    const none = { title: "rookie", theme: "ember", frame: "none", namefx: "none", rankfx: "none", background: "none", avatar: "a_letter" }[slot];
+    if (!none) throw new Error("Unknown slot");
+    p[slot] = none; this._save(d); return { profile: this._fix(p) };
+  }
+  async unlockSkill(id) {
+    const d = this._need(), p = d.profile, sk = skill(id), today = this._today();
+    if (!sk) throw new Error("Unknown skill");
+    if (has(p, id)) throw new Error("You already have this skill");
+    if (sk.requires && !has(p, sk.requires)) throw new Error("Unlock the skill before it first");
+    const free = spFree(p);
+    if (free < sk.cost) throw new Error(`Needs ${sk.cost} skill point${sk.cost === 1 ? "" : "s"}. You have ${free}.`);
+    p.skills.push(id);
+    const granted = ITEMS.filter((it) => it.granted_by === id && !p.inventory.includes(it.id)).map((it) => it.id);
+    p.inventory.push(...granted);
+    const unlocks = this._award(d, today, "skill");
+    this._save(d); return { profile: this._fix(p), granted, unlocks };
+  }
+  async setShowcase(ids) {
+    const d = this._need(), p = d.profile, slots = showcaseSlots(p);
+    if (ids.length > slots) throw new Error(`You can show ${slots} achievement${slots === 1 ? "" : "s"}`);
+    if (new Set(ids).size !== ids.length) throw new Error("Pick each achievement once");
+    if (ids.some((x) => !achievement(x) || !d.unlocks.some((u) => u.item_id === x))) throw new Error("You haven't unlocked that achievement");
+    p.showcase = ids; this._save(d); return { profile: this._fix(p) };
+  }
+  async getAchievements() {
+    const d = this._need(), p = d.profile;
+    return { unlocked: d.unlocks.filter((u) => achievement(u.item_id)).map((u) => ({ id: u.item_id, at: new Date(u.at).toISOString(), day: u.local_day })),
+      sp_free: spFree(p), level: levelFor(p.xp).level };
   }
   async leaderboard(board) {
     const d = this._load(); if (!d) return { rows: [], me: null };
@@ -299,6 +370,10 @@ class SupaBackend {
   claimDaily() { return this._rpc("claim_daily"); }
   buy(id) { return this._rpc("buy_item", { p_item: id }); }
   equip(id) { return this._rpc("equip", { p_item: id }); }
+  unequip(slot) { return this._rpc("unequip", { p_slot: slot }); }
+  unlockSkill(id) { return this._rpc("unlock_skill", { p_skill: id }); }
+  setShowcase(ids) { return this._rpc("set_showcase", { p_ids: ids }); }
+  getAchievements() { return this._rpc("get_achievements"); }
   async leaderboard(board, me) {
     const col = BOARDS[board].col;
     if (board === "weekly") {

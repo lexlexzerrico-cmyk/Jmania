@@ -17,7 +17,7 @@
 <div class="shell">
   <header class="top">
     <button class="me-chip" type="button" data-go="me" aria-label="Your profile">
-      <span class="avatar" id="hAvatar">?</span>
+      <span class="av-slot" id="hAvatar"></span>
       <span class="who"><b id="hName">Player</b><small id="hTitle">Rookie</small></span>
     </button>
     <div class="top-right">
@@ -137,6 +137,24 @@
       <p class="note">Quest targets stay the same no matter how much you train, and rewards never grow past the target. Listen to your body and take rest days.</p>
     </section>
 
+    <!-- PROGRESSION -->
+    <section class="view" id="view-skills" aria-label="Progression" hidden>
+      <div class="view-head"><h2>Progression</h2>
+        <div class="seg mini" id="progSeg" role="group" aria-label="Progression view">
+          <button type="button" data-ptab="tree" aria-pressed="true">Skill tree</button>
+          <button type="button" data-ptab="ach" aria-pressed="false">Achievements</button>
+        </div>
+      </div>
+      <div id="progTree" class="view-part">
+        <div class="panel sp-card" id="spCard"></div>
+        <div class="tree" id="tree"></div>
+      </div>
+      <div id="progAch" class="view-part" hidden>
+        <div class="panel ach-summary" id="achSummary"></div>
+        <div id="achList"></div>
+      </div>
+    </section>
+
     <!-- RANKS -->
     <section class="view" id="view-ranks" aria-label="Leaderboards" hidden>
       <div class="view-head">
@@ -159,23 +177,20 @@
         <h2>Store</h2>
         <div class="grit-pill big"><svg class="i" data-icon="coin"></svg><b id="sGrit">0</b></div>
       </div>
-      <div class="panel store-earn"><svg class="i" data-icon="coin"></svg><span>Earn Grit with 1 per camera rep (½ when tapping), the daily drop, and +100 for every title you unlock. Buying takes two taps.</span></div>
-      <h3>Boosts</h3>
-      <div class="grid" id="storeBoosts"></div>
-      <h3>Titles</h3>
-      <div class="grid" id="storeTitles"></div>
-      <h3>Themes</h3>
-      <div class="grid" id="storeThemes"></div>
+      <div class="panel store-earn"><svg class="i" data-icon="coin"></svg><span>Earn Grit from camera reps, quests, the daily drop and achievements. Tap any item to preview it on your profile. Nothing here costs real money.</span></div>
+      <div class="seg scroll" id="storeCats" role="group" aria-label="Store category"></div>
+      <div class="grid shop-grid" id="storeGrid"></div>
     </section>
 
     <!-- ME -->
     <section class="view" id="view-me" aria-label="Profile" hidden>
       <div class="panel hero" id="hero"></div>
+      <div class="sc-head"><h3>Showcase</h3><button class="link-btn" type="button" data-edit-showcase><svg class="i" data-icon="sparkle"></svg>Edit</button></div>
+      <div class="showcase" id="showcase"></div>
       <div class="stats" id="stats"></div>
-      <h3>Titles</h3>
-      <div class="locker" id="titleLocker"></div>
-      <h3>Themes</h3>
-      <div class="swatches" id="themeLocker"></div>
+      <div class="sc-head"><h3>Locker</h3><span class="note" id="lockerCount"></span></div>
+      <div class="seg scroll" id="lockerSeg" role="group" aria-label="Cosmetic slot"></div>
+      <div class="locker-grid" id="lockerGrid"></div>
       <h3>Rank ladder</h3>
       <div class="panel"><ol class="ladder" id="ladder"></ol></div>
       <h3>Settings</h3>
@@ -190,6 +205,7 @@
     <button class="tab" type="button" data-go="train"><svg class="i" data-icon="dumbbell"></svg><span>Train</span></button>
     <button class="tab" type="button" data-go="hub"><svg class="i" data-icon="chart"></svg><span>Hub</span></button>
     <button class="tab" type="button" data-go="quests"><svg class="i" data-icon="scroll"></svg><span>Quests</span><b class="q-badge" hidden>0</b></button>
+    <button class="tab" type="button" data-go="skills"><svg class="i" data-icon="tree"></svg><span>Skills</span></button>
     <button class="tab" type="button" data-go="ranks"><svg class="i" data-icon="trophy"></svg><span>Ranks</span></button>
     <button class="tab" type="button" data-go="store"><svg class="i" data-icon="bag"></svg><span>Store</span></button>
     <button class="tab desk" type="button" data-go="me"><svg class="i" data-icon="user"></svg><span>Profile</span></button>

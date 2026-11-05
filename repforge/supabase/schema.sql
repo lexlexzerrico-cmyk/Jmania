@@ -130,6 +130,41 @@ create table if not exists public.unlocks (
   primary key (user_id, item_id)
 );
 
+-- ---- v3 upgrades: skills, achievements, cosmetics ----
+alter table public.items drop constraint if exists items_kind_check;
+alter table public.items add constraint items_kind_check check (kind in ('title','theme','boost','frame','namefx','rankfx','background','avatar'));
+alter table public.items add column if not exists rarity     text not null default 'common';
+alter table public.items add column if not exists granted_by text;      -- achievement / skill id that grants it, or 'default' (everyone owns it)
+alter table public.items drop constraint if exists items_rarity_check;
+alter table public.items add constraint items_rarity_check check (rarity in ('common','rare','epic','legendary'));
+
+alter table public.profiles add column if not exists skills     text[] not null default '{}';
+alter table public.profiles add column if not exists frame      text not null default 'none';
+alter table public.profiles add column if not exists namefx     text not null default 'none';
+alter table public.profiles add column if not exists rankfx     text not null default 'none';
+alter table public.profiles add column if not exists background text not null default 'none';
+alter table public.profiles add column if not exists avatar     text not null default 'a_letter';
+alter table public.profiles add column if not exists showcase   text[] not null default '{}';
+
+create table if not exists public.skill_defs (
+  id          text primary key,
+  branch      text not null check (branch in ('discipline','strength','experience','mastery')),
+  tier        int  not null check (tier between 1 and 5),
+  cost        int  not null check (cost > 0),
+  requires    text references public.skill_defs(id),
+  name        text not null,
+  description text not null
+);
+
+create table if not exists public.achievement_defs (
+  id          text primary key,
+  category    text not null,
+  name        text not null,
+  description text not null,
+  grit        int  not null default 100,
+  sort        int  not null default 0
+);
+
 create unique index if not exists profiles_username_lower on public.profiles (lower(username));
 create index if not exists profiles_rp_idx     on public.profiles (rp desc);
 create index if not exists profiles_push_idx   on public.profiles (total_push desc);
@@ -144,26 +179,103 @@ create index if not exists quest_claims_day    on public.quest_claims (user_id, 
 
 -- =================================================================== catalog
 -- Keep in sync with js/catalog.js (names and descriptions live there; prices here win).
-insert into public.items (id, kind, price, minutes, buyable) values
-  -- earned titles (not for sale)
-  ('rookie','title',0,null,false), ('first_set','title',0,null,false), ('fifty','title',0,null,false),
-  ('century','title',0,null,false), ('k1','title',0,null,false), ('k10','title',0,null,false),
-  ('streak7','title',0,null,false), ('streak30','title',0,null,false), ('gilded','title',0,null,false),
-  ('legend','title',0,null,false), ('questbound','title',0,null,false), ('restwise','title',0,null,false),
-  ('recordbreaker','title',0,null,false),
+insert into public.items (id, kind, price, minutes, buyable, rarity, granted_by) values
+  -- titles earned from achievements (granted_by = the achievement)
+  ('rookie','title',0,null,false,'common','default'),
+  ('first_set','title',0,null,false,'common','first_set'), ('fifty','title',0,null,false,'common','fifty'),
+  ('century','title',0,null,false,'rare','century'), ('k1','title',0,null,false,'rare','k1'), ('k10','title',0,null,false,'epic','k10'),
+  ('streak7','title',0,null,false,'rare','streak7'), ('streak30','title',0,null,false,'epic','streak30'),
+  ('gilded','title',0,null,false,'rare','gilded'), ('legend','title',0,null,false,'legendary','legend'),
+  ('questbound','title',0,null,false,'rare','questbound'), ('restwise','title',0,null,false,'common','restwise'),
+  ('recordbreaker','title',0,null,false,'rare','recordbreaker'),
+  ('triple','title',0,null,false,'common','triple'), ('dawn','title',0,null,false,'rare','dawn'), ('night','title',0,null,false,'rare','night'),
+  ('questmaster','title',0,null,false,'epic','questmaster'), ('level25','title',0,null,false,'epic','level25'),
+  ('collector','title',0,null,false,'epic','collector'),
+  -- titles from capstone skills
+  ('unbroken','title',0,null,false,'legendary','d5'), ('unyielding','title',0,null,false,'legendary','s5'),
+  ('sage','title',0,null,false,'legendary','e5'), ('grandmaster','title',0,null,false,'legendary','m5'),
   -- store titles
-  ('gymrat','title',300,null,true), ('corecrusher','title',450,null,true), ('plank','title',600,null,true),
-  ('beast','title',900,null,true), ('unit','title',1200,null,true), ('maincharacter','title',2000,null,true),
-  ('finalboss','title',5000,null,true),
+  ('gymrat','title',300,null,true,'common',null), ('corecrusher','title',450,null,true,'common',null), ('plank','title',600,null,true,'rare',null),
+  ('beast','title',900,null,true,'rare',null), ('unit','title',1200,null,true,'epic',null), ('maincharacter','title',2000,null,true,'epic',null),
+  ('finalboss','title',5000,null,true,'legendary',null),
   -- themes
-  ('ember','theme',0,null,false), ('cobalt','theme',400,null,true), ('jade','theme',400,null,true),
-  ('magenta','theme',600,null,true), ('ice','theme',600,null,true), ('crimson','theme',800,null,true),
-  ('champion','theme',3000,null,true),
+  ('ember','theme',0,null,false,'common','default'), ('cobalt','theme',400,null,true,'common',null), ('jade','theme',400,null,true,'common',null),
+  ('magenta','theme',600,null,true,'rare',null), ('ice','theme',600,null,true,'rare',null), ('crimson','theme',800,null,true,'rare',null),
+  ('champion','theme',3000,null,true,'legendary',null),
   -- boosts
-  ('grit2x','boost',250,30,true), ('xpsurge','boost',200,30,true), ('rankrush','boost',400,20,true),
-  ('shield','boost',300,null,true)
-on conflict (id) do update set kind = excluded.kind, price = excluded.price,
-  minutes = excluded.minutes, buyable = excluded.buyable;
+  ('grit2x','boost',250,30,true,'common',null), ('xpsurge','boost',200,30,true,'common',null), ('rankrush','boost',400,20,true,'rare',null),
+  ('shield','boost',300,null,true,'rare',null),
+  -- profile frames
+  ('f_iron','frame',300,null,true,'common',null), ('f_ember','frame',700,null,true,'rare',null), ('f_runic','frame',1500,null,true,'epic',null),
+  ('f_laurel','frame',0,null,false,'epic','questbound'), ('f_gilded','frame',0,null,false,'legendary','m2'), ('f_titan','frame',0,null,false,'legendary','s5'),
+  -- name effects
+  ('n_gold','namefx',800,null,true,'rare',null), ('n_frost','namefx',800,null,true,'rare',null), ('n_fire','namefx',1600,null,true,'epic',null),
+  ('n_glow','namefx',0,null,false,'epic','e5'), ('n_prism','namefx',0,null,false,'legendary','m4'),
+  -- rank effects
+  ('r_pulse','rankfx',900,null,true,'rare',null), ('r_halo','rankfx',2500,null,true,'legendary',null), ('r_aura','rankfx',0,null,false,'epic','m3'),
+  -- profile backgrounds
+  ('b_dusk','background',400,null,true,'common',null), ('b_runes','background',1000,null,true,'rare',null),
+  ('b_aurora','background',1800,null,true,'epic',null), ('b_forge','background',0,null,false,'legendary','m5'),
+  -- avatars
+  ('a_letter','avatar',0,null,false,'common','default'), ('a_bolt','avatar',0,null,false,'common','default'), ('a_dumbbell','avatar',0,null,false,'common','default'),
+  ('a_shield','avatar',400,null,true,'rare',null), ('a_skull','avatar',1200,null,true,'epic',null),
+  ('a_flame','avatar',0,null,false,'rare','streak7'), ('a_moon','avatar',0,null,false,'rare','restwise'),
+  ('a_crown','avatar',0,null,false,'epic','gilded'), ('a_star','avatar',0,null,false,'epic','recordbreaker')
+on conflict (id) do update set kind = excluded.kind, price = excluded.price, minutes = excluded.minutes,
+  buyable = excluded.buyable, rarity = excluded.rarity, granted_by = excluded.granted_by;
+
+-- Skill tree. Bonuses are flat percentages or one-off unlocks: none of them asks for more reps.
+insert into public.skill_defs (id, branch, tier, cost, requires, name, description) values
+  ('d1','discipline',1,1,null,'Steady Habit','+50% Grit from the daily Show up quest'),
+  ('d2','discipline',2,1,'d1','Second Wind','Hold 4 Streak Shields instead of 3'),
+  ('d3','discipline',3,2,'d2','Quest Ledger','+10% Grit from every quest'),
+  ('d4','discipline',4,2,'d3','Rest Ritual','Log 3 rest days a week instead of 2'),
+  ('d5','discipline',5,3,'d4','Unbroken','+25 Grit from the daily drop. Unlocks the Unbroken title'),
+  ('s1','strength',1,1,null,'Iron Will','+10% Grit from camera-tracked sets'),
+  ('s2','strength',2,1,'s1','Milestone Hunter','Achievements pay +50 Grit more'),
+  ('s3','strength',3,2,'s2','Clean Reps','+10% rank points from camera-tracked sets'),
+  ('s4','strength',4,2,'s3','Record Bounty','+50 Grit every time you beat a personal record'),
+  ('s5','strength',5,3,'s4','Unyielding','Unlocks the Titan frame and the Unyielding title'),
+  ('e1','experience',1,1,null,'Quick Study','+10% XP from sets'),
+  ('e2','experience',2,1,'e1','Scholar','+25% XP from quests'),
+  ('e3','experience',3,2,'e2','Veteran','Another +10% XP from sets'),
+  ('e4','experience',4,2,'e3','Record Keeper','+100 XP every time you beat a personal record'),
+  ('e5','experience',5,3,'e4','Sage','Unlocks the Glow name effect and the Sage title'),
+  ('m1','mastery',1,1,null,'Showcase','Show 3 achievements on your profile instead of 1'),
+  ('m2','mastery',2,1,'m1','Gilded','Unlocks the Gilded frame'),
+  ('m3','mastery',3,2,'m2','Aura','Unlocks the Aura rank effect'),
+  ('m4','mastery',4,2,'m3','Prismatic','Unlocks the Prism name effect'),
+  ('m5','mastery',5,3,'m4','Grandmaster','Unlocks the Forge background and the Grandmaster title')
+on conflict (id) do update set branch = excluded.branch, tier = excluded.tier, cost = excluded.cost,
+  requires = excluded.requires, name = excluded.name, description = excluded.description;
+
+insert into public.achievement_defs (id, category, name, description, grit, sort) values
+  ('first_set','Training','First Rep','Finish your first set',100,1),
+  ('fifty','Training','Half Century','50 reps in one set',100,2),
+  ('century','Training','Centurion','100 reps in one set',100,3),
+  ('triple','Training','Triple Threat','Push-ups, sit-ups and squats on the same day',100,4),
+  ('dawn','Training','Dawn Patrol','Finish a set before 7 am',100,5),
+  ('night','Training','Night Owl','Finish a set after 10 pm',100,6),
+  ('k1','Milestones','Thousand Club','1,000 total reps',100,10),
+  ('k10','Milestones','Ten-K Machine','10,000 total reps',100,11),
+  ('push500','Milestones','Press Pilgrim','500 push-ups in total',100,12),
+  ('sit500','Milestones','Core of Steel','500 sit-ups in total',100,13),
+  ('squat500','Milestones','Leg Legend','500 squats in total',100,14),
+  ('streak7','Consistency','Week Warrior','7-day streak',100,20),
+  ('streak30','Consistency','Iron Habit','30-day streak',100,21),
+  ('restwise','Consistency','Restwise','Log 5 rest days',100,22),
+  ('questbound','Consistency','Questbound','Claim 25 quest rewards',100,23),
+  ('questmaster','Consistency','Quest Master','Claim 100 quest rewards',150,24),
+  ('recordbreaker','Records','Record Breaker','Beat your personal records 5 times',100,30),
+  ('gilded','Progression','Gilded','Reach Gold rank',100,40),
+  ('legend','Progression','Living Legend','Reach Legend rank',200,41),
+  ('level10','Progression','Seasoned','Reach level 10',100,42),
+  ('level25','Progression','Veteran Soul','Reach level 25',150,43),
+  ('apprentice','Progression','Apprentice','Unlock your first skill',100,44),
+  ('capstone','Progression','Capstone','Unlock the last skill in any branch',150,45),
+  ('collector','Collection','Collector','Own 10 cosmetics',150,50)
+on conflict (id) do update set category = excluded.category, name = excluded.name, description = excluded.description,
+  grit = excluded.grit, sort = excluded.sort;
 
 -- Quests. Targets are deliberately moderate and rewards never grow past the target.
 insert into public.quest_defs (id, period, slot, metric, target, xp, grit, title, description) values
@@ -234,16 +346,69 @@ begin
   return p;
 end $$;
 
--- Gives an earned title once (+100 Grit) and logs when it happened.
+create or replace function public._has(p public.profiles, skill text) returns boolean
+language sql immutable as $$ select skill = any(p.skills) $$;
+
+-- Level L needs 40(L-1)^2 + 60(L-1) XP in total (same formula as js/catalog.js).
+create or replace function public._level(xp int) returns int
+language sql immutable as $$ select 1 + floor((-60 + sqrt(3600 + 160 * greatest(xp, 0)::float8)) / 80)::int $$;
+
+-- One skill point per level after the first, minus what has been spent.
+create or replace function public._sp_free(p public.profiles) returns int
+language sql stable security definer set search_path = public as $$
+  select public._level(p.xp) - 1 - coalesce((select sum(cost) from skill_defs where id = any(p.skills)), 0)::int
+$$;
+
+-- Unlocks an achievement once: logs it, pays its Grit, and grants every item it unlocks.
+-- (Item ids passed here are achievement or skill ids; legacy callers passed title ids, which are the same.)
 create or replace function public._unlock(p public.profiles, item text, src text, today date) returns public.profiles
 language plpgsql security definer set search_path = public as $$
+declare g int; extra text[];
 begin
-  if item = any(p.inventory) then return p; end if;
-  p.inventory := p.inventory || item;
-  p.grit := p.grit + 100;
+  if exists (select 1 from public.unlocks where user_id = p.id and item_id = item) then return p; end if;
   insert into public.unlocks (user_id, item_id, source, local_day) values (p.id, item, src, today) on conflict do nothing;
+  select coalesce(array_agg(id), '{}') into extra from public.items where granted_by = item and not (id = any(p.inventory));
+  p.inventory := p.inventory || extra;
+  if exists (select 1 from public.achievement_defs where id = item) then
+    g := (select grit from public.achievement_defs where id = item) + (case when public._has(p, 's2') then 50 else 0 end);
+    p.grit := p.grit + g;
+  end if;
   return p;
 end $$;
+
+-- Achievements the player has just earned (not yet unlocked).
+create or replace function public._ach_due(p public.profiles, today date) returns text[]
+language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(d.id order by d.sort), '{}') from achievement_defs d
+  where not exists (select 1 from unlocks u where u.user_id = p.id and u.item_id = d.id)
+    and not (d.id = any(p.inventory))
+    and case d.id
+      when 'first_set'     then p.sets_count >= 1
+      when 'fifty'         then p.best_set >= 50
+      when 'century'       then p.best_set >= 100
+      when 'triple'        then (select count(distinct kind) from sets where user_id = p.id and local_day = today) = 3
+      when 'dawn'          then exists (select 1 from sets where user_id = p.id and local_day = today and extract(hour from created_at at time zone p.tz) < 7)
+      when 'night'         then exists (select 1 from sets where user_id = p.id and local_day = today and extract(hour from created_at at time zone p.tz) >= 22)
+      when 'k1'            then p.total_push + p.total_sit + p.total_squat >= 1000
+      when 'k10'           then p.total_push + p.total_sit + p.total_squat >= 10000
+      when 'push500'       then p.total_push >= 500
+      when 'sit500'        then p.total_sit >= 500
+      when 'squat500'      then p.total_squat >= 500
+      when 'streak7'       then p.streak >= 7
+      when 'streak30'      then p.streak >= 30
+      when 'restwise'      then p.rest_count >= 5
+      when 'questbound'    then p.quests_done >= 25
+      when 'questmaster'   then p.quests_done >= 100
+      when 'recordbreaker' then p.records_count >= 5
+      when 'gilded'        then p.rp >= 1750
+      when 'legend'        then p.rp >= 14000
+      when 'level10'       then public._level(p.xp) >= 10
+      when 'level25'       then public._level(p.xp) >= 25
+      when 'apprentice'    then cardinality(p.skills) >= 1
+      when 'capstone'      then exists (select 1 from skill_defs s where s.id = any(p.skills) and s.tier = 5)
+      when 'collector'     then (select count(*) from items i where i.id = any(p.inventory) and i.kind in ('frame','namefx','rankfx','background','avatar') and i.granted_by is distinct from 'default') >= 10
+      else false end
+$$;
 
 -- Quest progress, always recomputed from real history (never stored counters).
 create or replace function public._metric(uid uuid, m text, d0 date, d1 date) returns int
@@ -330,11 +495,10 @@ returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   p public.profiles;
-  today date; wk date;
-  v_rp int; v_xp int; v_grit int; v_bonus int := 0; v_set bigint; v_sess timestamptz;
+  today date; wk date; cam boolean := p_source = 'cam';
+  v_rp int; v_xp int; v_grit int; g0 int; v_set bigint; v_sess timestamptz;
   last_set public.sets;
-  unlocks text[] := '{}'; recs jsonb := '[]'; r int; inv0 text[];
-  t text; total int;
+  unl text[] := '{}'; recs jsonb := '[]'; r int; a text; i int; n_rec int;
 begin
   p := public._me();
   today := public._local_today(p.tz); wk := public._week_start(today);
@@ -345,15 +509,20 @@ begin
   select * into last_set from public.sets where user_id = p.id order by created_at desc limit 1;
   if found and last_set.created_at > now() - interval '5 seconds' then raise exception 'Wait a few seconds between sets'; end if;
 
+  -- rewards (mirrored by previewEarn() in js/backend.js)
   v_rp := round(p_reps
     * (case when p_kind = 'push' then 1.0 else 0.8 end)
-    * (case when p_source = 'tap' then 0.5 else 1.0 end)
-    * (case when public._boost_on(p.boosts, 'rankrush') then 1.25 else 1.0 end));
-  v_xp := p_reps * 2 * (case when public._boost_on(p.boosts, 'xpsurge') then 2 else 1 end);
+    * (case when cam then 1.0 else 0.5 end)
+    * (case when public._boost_on(p.boosts, 'rankrush') then 1.25 else 1.0 end)
+    * (case when cam and public._has(p, 's3') then 1.1 else 1.0 end));
+  v_xp := round(p_reps * 2
+    * (case when public._boost_on(p.boosts, 'xpsurge') then 2 else 1 end)
+    * (1 + (case when public._has(p, 'e1') then 0.1 else 0 end) + (case when public._has(p, 'e3') then 0.1 else 0 end)));
   v_grit := round(p_reps
-    * (case when p_source = 'tap' then 0.5 else 1.0 end)
+    * (case when cam then 1.0 else 0.5 end)
     * (case when public._boost_on(p.boosts, 'grit2x') then 2.0 else 1.0 end)
-    * (case when coalesce(p_music, false) then 1.1 else 1.0 end));
+    * (case when coalesce(p_music, false) then 1.1 else 1.0 end)
+    * (case when cam and public._has(p, 's1') then 1.1 else 1.0 end));
 
   -- Training on a day logged as rest turns it back into a training day.
   delete from public.rest_days where user_id = p.id and day = today;
@@ -368,7 +537,6 @@ begin
   else p.total_squat := p.total_squat + p_reps; end if;
   p.best_set := greatest(p.best_set, p_reps);
   p.sets_count := p.sets_count + 1;
-  total := p.total_push + p.total_sit + p.total_squat;
 
   -- a session is a run of sets with less than 15 minutes between them
   v_sess := case when last_set.id is not null and last_set.created_at > now() - interval '15 minutes'
@@ -378,7 +546,7 @@ begin
   returning id into v_set;
 
   -- personal records (single-set records need camera tracking)
-  if p_source = 'cam' then
+  if cam then
     r := public._record(p.id, 'set_' || p_kind, p_reps, v_set::text, v_set, today);
     if r > 0 then recs := recs || jsonb_build_object('key', 'set_' || p_kind, 'value', p_reps, 'prev', r); end if;
   end if;
@@ -390,24 +558,15 @@ begin
   if r > 0 then recs := recs || jsonb_build_object('key', 'session_secs', 'value', extract(epoch from now() - v_sess)::int, 'prev', r); end if;
   r := public._record(p.id, 'week_days', public._metric(p.id, 'days', wk, wk + 6), wk::text, v_set, today);
   if r > 0 then recs := recs || jsonb_build_object('key', 'week_days', 'value', public._metric(p.id, 'days', wk, wk + 6), 'prev', r); end if;
-  p.records_count := p.records_count + jsonb_array_length(recs);
+  n_rec := jsonb_array_length(recs);
+  p.records_count := p.records_count + n_rec;
+  g0 := p.grit;
+  if public._has(p, 's4') then p.grit := p.grit + 50 * n_rec; end if;    -- Record Bounty
+  if public._has(p, 'e4') then p.xp := p.xp + 100 * n_rec; end if;      -- Record Keeper
 
-  -- earned titles: +100 Grit each
-  inv0 := p.inventory;
-  foreach t in array array['first_set','fifty','century','k1','k10','streak7','streak30','gilded','legend','recordbreaker'] loop
-    if  t = 'first_set'
-     or (t = 'fifty'    and p_reps >= 50)
-     or (t = 'century'  and p_reps >= 100)
-     or (t = 'k1'       and total >= 1000)
-     or (t = 'k10'      and total >= 10000)
-     or (t = 'streak7'  and p.streak >= 7)
-     or (t = 'streak30' and p.streak >= 30)
-     or (t = 'gilded'   and p.rp >= 1750)
-     or (t = 'legend'   and p.rp >= 14000)
-     or (t = 'recordbreaker' and p.records_count >= 5) then
-      if not (t = any(p.inventory)) then unlocks := unlocks || t; v_bonus := v_bonus + 100; end if;
-      p := public._unlock(p, t, 'set', today);
-    end if;
+  -- achievements (two passes: an unlock can complete another, e.g. Collector)
+  for i in 1..2 loop
+    foreach a in array public._ach_due(p, today) loop p := public._unlock(p, a, 'set', today); unl := unl || a; end loop;
   end loop;
 
   update public.profiles set
@@ -419,34 +578,46 @@ begin
 
   return jsonb_build_object(
     'profile', to_jsonb(p),
-    'earned', jsonb_build_object('rp', v_rp, 'xp', v_xp, 'grit', v_grit, 'bonus', v_bonus),
-    'unlocks', to_jsonb(unlocks),
+    'earned', jsonb_build_object('rp', v_rp, 'xp', v_xp, 'grit', v_grit, 'bonus', p.grit - g0),
+    'unlocks', to_jsonb(unl),
     'records', recs);
 end $$;
 
 create or replace function public.log_rest_day() returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare p public.profiles; today date; wk date; unl text[] := '{}';
+declare p public.profiles; today date; wk date; unl text[] := '{}'; a text; i int; lim int;
 begin
   p := public._me();
   today := public._local_today(p.tz); wk := public._week_start(today);
+  lim := case when public._has(p, 'd4') then 3 else 2 end;    -- Rest Ritual
   if exists (select 1 from public.sets where user_id = p.id and local_day = today) then
     raise exception 'You trained today already. Rest days are for days off.';
   end if;
   if exists (select 1 from public.rest_days where user_id = p.id and day = today) then raise exception 'Today is already a rest day'; end if;
-  if (select count(*) from public.rest_days where user_id = p.id and day between wk and wk + 6) >= 2 then
-    raise exception 'You can log up to 2 rest days a week';
+  if (select count(*) from public.rest_days where user_id = p.id and day between wk and wk + 6) >= lim then
+    raise exception 'You can log up to % rest days a week', lim;
   end if;
   insert into public.rest_days (user_id, day) values (p.id, today);
   p := public._streak(p, today);
   p.rest_count := p.rest_count + 1;
-  if p.rest_count >= 5 and not ('restwise' = any(p.inventory)) then unl := unl || 'restwise'::text; end if;
-  if p.rest_count >= 5 then p := public._unlock(p, 'restwise', 'rest', today); end if;
+  -- achievements (two passes: an unlock can complete another, e.g. Collector)
+  for i in 1..2 loop
+    foreach a in array public._ach_due(p, today) loop p := public._unlock(p, a, 'rest', today); unl := unl || a; end loop;
+  end loop;
   update public.profiles set streak = p.streak, last_active = p.last_active, boosts = p.boosts,
     rest_count = p.rest_count, inventory = p.inventory, grit = p.grit
   where id = p.id returning * into p;
   return jsonb_build_object('profile', to_jsonb(p), 'unlocks', to_jsonb(unl));
 end $$;
+
+-- Quest rewards after skills (Steady Habit, Quest Ledger, Scholar).
+create or replace function public._quest_grit(p public.profiles, q public.quest_defs) returns int
+language sql immutable as $$
+  select round(q.grit * (case when q.id = 'd_checkin' and public._has(p, 'd1') then 1.5 else 1 end)
+                      * (case when public._has(p, 'd3') then 1.1 else 1 end))::int
+$$;
+create or replace function public._quest_xp(p public.profiles, q public.quest_defs) returns int
+language sql immutable as $$ select round(q.xp * (case when public._has(p, 'e2') then 1.25 else 1 end))::int $$;
 
 create or replace function public.get_quests() returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -458,7 +629,8 @@ begin
     if q.period = 'daily' then d0 := today; d1 := today; else d0 := wk; d1 := wk + 6; end if;
     prog := public._metric(p.id, q.metric, d0, d1);
     res := res || jsonb_build_object('id', q.id, 'period', q.period, 'slot', q.slot, 'title', q.title, 'description', q.description,
-      'metric', q.metric, 'target', q.target, 'progress', least(prog, q.target), 'xp', q.xp, 'grit', q.grit,
+      'metric', q.metric, 'target', q.target, 'progress', least(prog, q.target),
+      'xp', public._quest_xp(p, q), 'grit', public._quest_grit(p, q),
       'claimed', exists (select 1 from public.quest_claims c where c.user_id = p.id and c.quest_id = q.id and c.period_start = d0));
   end loop;
   return jsonb_build_object(
@@ -468,16 +640,17 @@ begin
     'quests', res, 'quests_done', p.quests_done,
     'trained_today', exists (select 1 from public.sets where user_id = p.id and local_day = today),
     'rested_today', exists (select 1 from public.rest_days where user_id = p.id and day = today),
-    'rest_this_week', (select count(*) from public.rest_days where user_id = p.id and day between wk and wk + 6));
+    'rest_this_week', (select count(*) from public.rest_days where user_id = p.id and day between wk and wk + 6),
+    'rest_limit', case when public._has(p, 'd4') then 3 else 2 end);
 end $$;
 
 create or replace function public.claim_quest(p_quest text) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare p public.profiles; today date; q public.quest_defs; d0 date; d1 date; prog int; unl text[] := '{}';
+declare p public.profiles; today date; q public.quest_defs; d0 date; d1 date; prog int; unl text[] := '{}'; a text; i int; v_xp int; v_grit int;
 begin
   p := public._me();
   today := public._local_today(p.tz);
-  select * into q from public._assigned(p.id, today) a where a.id = p_quest;
+  select * into q from public._assigned(p.id, today) x where x.id = p_quest;
   if not found then raise exception 'That quest isn''t active right now'; end if;
   if q.period = 'daily' then d0 := today; d1 := today; else d0 := public._week_start(today); d1 := d0 + 6; end if;
   if exists (select 1 from public.quest_claims where user_id = p.id and quest_id = q.id and period_start = d0) then
@@ -485,15 +658,18 @@ begin
   end if;
   prog := public._metric(p.id, q.metric, d0, d1);
   if prog < q.target then raise exception 'Not finished yet (% of %)', prog, q.target; end if;
-  insert into public.quest_claims (user_id, quest_id, period_start, xp, grit, local_day) values (p.id, q.id, d0, q.xp, q.grit, today);
-  p.xp := p.xp + q.xp;
-  p.grit := p.grit + q.grit;
+  v_xp := public._quest_xp(p, q); v_grit := public._quest_grit(p, q);
+  insert into public.quest_claims (user_id, quest_id, period_start, xp, grit, local_day) values (p.id, q.id, d0, v_xp, v_grit, today);
+  p.xp := p.xp + v_xp;
+  p.grit := p.grit + v_grit;
   p.quests_done := p.quests_done + 1;
-  if p.quests_done >= 25 and not ('questbound' = any(p.inventory)) then unl := unl || 'questbound'::text; end if;
-  if p.quests_done >= 25 then p := public._unlock(p, 'questbound', 'quest', today); end if;
+  -- achievements (two passes: an unlock can complete another, e.g. Collector)
+  for i in 1..2 loop
+    foreach a in array public._ach_due(p, today) loop p := public._unlock(p, a, 'quest', today); unl := unl || a; end loop;
+  end loop;
   update public.profiles set xp = p.xp, grit = p.grit, quests_done = p.quests_done, inventory = p.inventory
   where id = p.id returning * into p;
-  return jsonb_build_object('profile', to_jsonb(p), 'xp', q.xp, 'grit', q.grit, 'unlocks', to_jsonb(unl));
+  return jsonb_build_object('profile', to_jsonb(p), 'xp', v_xp, 'grit', v_grit, 'unlocks', to_jsonb(unl));
 end $$;
 
 create or replace function public.claim_daily() returns jsonb
@@ -503,52 +679,136 @@ begin
   p := public._me();
   today := public._local_today(p.tz);
   if p.last_daily >= today then raise exception 'Daily drop already claimed. Come back tomorrow'; end if;
-  amt := 50 + 10 * least(p.streak, 10);
+  amt := 50 + 10 * least(p.streak, 10) + (case when public._has(p, 'd5') then 25 else 0 end);
   update public.profiles set grit = grit + amt, last_daily = today where id = p.id returning * into p;
   return jsonb_build_object('profile', to_jsonb(p), 'amount', amt);
 end $$;
 
 create or replace function public.buy_item(p_item text) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare p public.profiles; it public.items; v_until timestamptz; sh int;
+declare p public.profiles; it public.items; v_until timestamptz; sh int; cap int; today date; unl text[] := '{}'; a text; i int;
 begin
   p := public._me();
+  today := public._local_today(p.tz);
   select * into it from public.items where id = p_item and buyable;
   if not found then raise exception 'That item is not for sale'; end if;
   if p.grit < it.price then raise exception 'Not enough Grit yet'; end if;
 
-  if it.kind in ('title','theme') then
+  if it.kind <> 'boost' then
     if p_item = any(p.inventory) then raise exception 'You already own this'; end if;
     p.inventory := p.inventory || p_item;
   elsif p_item = 'shield' then
     sh := coalesce((p.boosts->>'shield')::int, 0);
-    if sh >= 3 then raise exception 'You can hold up to 3 Streak Shields'; end if;
+    cap := case when public._has(p, 'd2') then 4 else 3 end;    -- Second Wind
+    if sh >= cap then raise exception 'You can hold up to % Streak Shields', cap; end if;
     p.boosts := jsonb_set(p.boosts, '{shield}', to_jsonb(sh + 1));
   else
     v_until := greatest(now(), coalesce((p.boosts->>p_item)::timestamptz, now())) + make_interval(mins => it.minutes);
     p.boosts := jsonb_set(p.boosts, array[p_item], to_jsonb(v_until));
   end if;
-
-  update public.profiles set grit = p.grit - it.price, inventory = p.inventory, boosts = p.boosts
+  p.grit := p.grit - it.price;
+  -- achievements (two passes: an unlock can complete another, e.g. Collector)
+  for i in 1..2 loop
+    foreach a in array public._ach_due(p, today) loop p := public._unlock(p, a, 'store', today); unl := unl || a; end loop;
+  end loop;
+  update public.profiles set grit = p.grit, inventory = p.inventory, boosts = p.boosts
   where id = p.id returning * into p;
+  return jsonb_build_object('profile', to_jsonb(p), 'unlocks', to_jsonb(unl));
+end $$;
+
+-- Equip anything you own (or a default item everyone owns).
+create or replace function public.equip(p_item text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; it public.items;
+begin
+  p := public._me();
+  select * into it from public.items where id = p_item;
+  if not found then raise exception 'Unknown item'; end if;
+  if not (p_item = any(p.inventory)) and it.granted_by is distinct from 'default' then raise exception 'Unlock this first'; end if;
+  case it.kind
+    when 'title'      then update public.profiles set title = p_item      where id = p.id returning * into p;
+    when 'theme'      then update public.profiles set theme = p_item      where id = p.id returning * into p;
+    when 'frame'      then update public.profiles set frame = p_item      where id = p.id returning * into p;
+    when 'namefx'     then update public.profiles set namefx = p_item     where id = p.id returning * into p;
+    when 'rankfx'     then update public.profiles set rankfx = p_item     where id = p.id returning * into p;
+    when 'background' then update public.profiles set background = p_item where id = p.id returning * into p;
+    when 'avatar'     then update public.profiles set avatar = p_item     where id = p.id returning * into p;
+    else raise exception 'That can''t be equipped';
+  end case;
   return jsonb_build_object('profile', to_jsonb(p));
 end $$;
 
-create or replace function public.equip(p_item text) returns jsonb
+create or replace function public.unequip(p_slot text) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare p public.profiles; k text;
+declare p public.profiles;
 begin
   p := public._me();
-  if not (p_item = any(p.inventory)) then raise exception 'Unlock this first'; end if;
-  select kind into k from public.items where id = p_item;
-  if k = 'theme' then
-    update public.profiles set theme = p_item where id = p.id returning * into p;
-  elsif k = 'title' then
-    update public.profiles set title = p_item where id = p.id returning * into p;
-  else
-    raise exception 'That can''t be equipped';
-  end if;
+  case p_slot
+    when 'title'      then update public.profiles set title = 'rookie'     where id = p.id returning * into p;
+    when 'theme'      then update public.profiles set theme = 'ember'      where id = p.id returning * into p;
+    when 'frame'      then update public.profiles set frame = 'none'       where id = p.id returning * into p;
+    when 'namefx'     then update public.profiles set namefx = 'none'      where id = p.id returning * into p;
+    when 'rankfx'     then update public.profiles set rankfx = 'none'      where id = p.id returning * into p;
+    when 'background' then update public.profiles set background = 'none'  where id = p.id returning * into p;
+    when 'avatar'     then update public.profiles set avatar = 'a_letter'  where id = p.id returning * into p;
+    else raise exception 'Unknown slot';
+  end case;
   return jsonb_build_object('profile', to_jsonb(p));
+end $$;
+
+create or replace function public.unlock_skill(p_skill text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; sk public.skill_defs; today date; unl text[] := '{}'; a text; i int; free int; granted text[];
+begin
+  p := public._me();
+  today := public._local_today(p.tz);
+  select * into sk from public.skill_defs where id = p_skill;
+  if not found then raise exception 'Unknown skill'; end if;
+  if public._has(p, p_skill) then raise exception 'You already have this skill'; end if;
+  if sk.requires is not null and not public._has(p, sk.requires) then raise exception 'Unlock the skill before it first'; end if;
+  free := public._sp_free(p);
+  if free < sk.cost then raise exception 'Needs % skill point%. You have %.', sk.cost, case when sk.cost = 1 then '' else 's' end, free; end if;
+  p.skills := p.skills || p_skill;
+  select coalesce(array_agg(id), '{}') into granted from public.items where granted_by = p_skill and not (id = any(p.inventory));
+  p.inventory := p.inventory || granted;
+  -- achievements (two passes: an unlock can complete another, e.g. Collector)
+  for i in 1..2 loop
+    foreach a in array public._ach_due(p, today) loop p := public._unlock(p, a, 'skill', today); unl := unl || a; end loop;
+  end loop;
+  update public.profiles set skills = p.skills, inventory = p.inventory, grit = p.grit where id = p.id returning * into p;
+  return jsonb_build_object('profile', to_jsonb(p), 'granted', to_jsonb(granted), 'unlocks', to_jsonb(unl));
+end $$;
+
+-- Pick which unlocked achievements show on your profile (1 slot, 3 with the Showcase skill).
+create or replace function public.set_showcase(p_ids text[]) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; slots int; x text;
+begin
+  p := public._me();
+  p_ids := coalesce(p_ids, '{}');
+  slots := case when public._has(p, 'm1') then 3 else 1 end;
+  if cardinality(p_ids) > slots then raise exception 'You can show % achievement%', slots, case when slots = 1 then '' else 's' end; end if;
+  if cardinality(p_ids) <> (select count(distinct v) from unnest(p_ids) v) then raise exception 'Pick each achievement once'; end if;
+  foreach x in array p_ids loop
+    if not exists (select 1 from public.unlocks where user_id = p.id and item_id = x)
+       or not exists (select 1 from public.achievement_defs where id = x) then
+      raise exception 'You haven''t unlocked that achievement';
+    end if;
+  end loop;
+  update public.profiles set showcase = p_ids where id = p.id returning * into p;
+  return jsonb_build_object('profile', to_jsonb(p));
+end $$;
+
+create or replace function public.get_achievements() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  p := public._me_read();
+  return jsonb_build_object(
+    'unlocked', (select coalesce(jsonb_agg(jsonb_build_object('id', u.item_id, 'at', u.created_at, 'day', u.local_day)), '[]')
+                 from public.unlocks u join public.achievement_defs d on d.id = u.item_id where u.user_id = p.id),
+    'sp_free', public._sp_free(p),
+    'level', public._level(p.xp));
 end $$;
 
 -- =================================================================== reading history
@@ -636,9 +896,22 @@ union all select user_id, key, value, 0, period, set_id, day, at from best_day
 union all select user_id, key, value, 0, period, set_id, day, at from best_week
 union all select user_id, key, value, 0, period, set_id, day, at from best_week_days;
 
+-- titles earned before achievements existed get their unlock rows
+insert into public.unlocks (user_id, item_id, source, local_day, created_at)
+select p.id, d.id, 'legacy', (p.created_at at time zone 'UTC')::date, p.created_at
+from public.profiles p join public.achievement_defs d on d.id = any(p.inventory)
+on conflict do nothing;
+
+-- items that unlocked achievements now grant (e.g. Gilded -> Crown avatar) for players who earned them earlier
+update public.profiles p set inventory = p.inventory || x.add
+from (select u.user_id, array_agg(distinct i.id) add
+      from public.unlocks u join public.items i on i.granted_by = u.item_id join public.profiles p2 on p2.id = u.user_id
+      where not (i.id = any(p2.inventory)) group by u.user_id) x
+where x.user_id = p.id;
+
 -- =================================================================== leaderboards
 create or replace view public.lb_weekly with (security_invoker = on) as
-  select p.id, p.username, p.title, p.theme, p.rp, sum(s.reps)::int as reps
+  select p.id, p.username, p.title, p.theme, p.rp, sum(s.reps)::int as reps, p.avatar, p.frame, p.namefx, p.rankfx
   from public.sets s join public.profiles p on p.id = s.user_id
   where s.created_at > now() - interval '7 days'
   group by p.id
@@ -654,6 +927,8 @@ alter table public.records      enable row level security;
 alter table public.quest_defs   enable row level security;
 alter table public.quest_claims enable row level security;
 alter table public.unlocks      enable row level security;
+alter table public.skill_defs   enable row level security;
+alter table public.achievement_defs enable row level security;
 
 drop policy if exists "Anyone can read profiles"   on public.profiles;
 drop policy if exists "Anyone can read sets"       on public.sets;
@@ -663,6 +938,10 @@ drop policy if exists "Anyone can read quests"     on public.quest_defs;
 drop policy if exists "Anyone can read unlocks"    on public.unlocks;
 drop policy if exists "Players read own rest days" on public.rest_days;
 drop policy if exists "Players read own claims"    on public.quest_claims;
+drop policy if exists "Anyone can read skills"     on public.skill_defs;
+drop policy if exists "Anyone can read achievements" on public.achievement_defs;
+create policy "Anyone can read skills"       on public.skill_defs       for select using (true);
+create policy "Anyone can read achievements" on public.achievement_defs for select using (true);
 create policy "Anyone can read profiles"   on public.profiles     for select using (true);
 create policy "Anyone can read sets"       on public.sets         for select using (true);
 create policy "Anyone can read items"      on public.items        for select using (true);
@@ -674,28 +953,32 @@ create policy "Players read own claims"    on public.quest_claims for select usi
 
 revoke insert, update, delete, truncate on
   public.profiles, public.sets, public.items, public.rest_days, public.records,
-  public.quest_defs, public.quest_claims, public.unlocks
+  public.quest_defs, public.quest_claims, public.unlocks, public.skill_defs, public.achievement_defs
   from anon, authenticated;
 grant select on
   public.profiles, public.sets, public.items, public.rest_days, public.records,
-  public.quest_defs, public.quest_claims, public.unlocks, public.lb_weekly
+  public.quest_defs, public.quest_claims, public.unlocks, public.skill_defs, public.achievement_defs, public.lb_weekly
   to anon, authenticated;
 
 -- internal helpers: never callable from the app
 revoke execute on function
   public._me(), public._me_read(), public._boost_on(jsonb, text), public._today(), public._local_today(text),
   public._week_start(date), public._streak(public.profiles, date), public._unlock(public.profiles, text, text, date),
-  public._metric(uuid, text, date, date), public._assigned(uuid, date), public._record(uuid, text, int, text, bigint, date)
+  public._metric(uuid, text, date, date), public._assigned(uuid, date), public._record(uuid, text, int, text, bigint, date),
+  public._has(public.profiles, text), public._level(int), public._sp_free(public.profiles), public._ach_due(public.profiles, date),
+  public._quest_grit(public.profiles, public.quest_defs), public._quest_xp(public.profiles, public.quest_defs)
   from public, anon, authenticated;
 
 -- player actions: signed-in players only
 revoke execute on function
   public.create_profile(text), public.set_timezone(text), public.submit_set(text, int, int, text, boolean),
   public.log_rest_day(), public.get_quests(), public.claim_quest(text), public.claim_daily(),
-  public.buy_item(text), public.equip(text), public.get_dashboard(int), public.day_detail(date), public.record_history(text)
+  public.buy_item(text), public.equip(text), public.get_dashboard(int), public.day_detail(date), public.record_history(text),
+  public.unequip(text), public.unlock_skill(text), public.set_showcase(text[]), public.get_achievements()
   from public, anon;
 grant execute on function
   public.create_profile(text), public.set_timezone(text), public.submit_set(text, int, int, text, boolean),
   public.log_rest_day(), public.get_quests(), public.claim_quest(text), public.claim_daily(),
-  public.buy_item(text), public.equip(text), public.get_dashboard(int), public.day_detail(date), public.record_history(text)
+  public.buy_item(text), public.equip(text), public.get_dashboard(int), public.day_detail(date), public.record_history(text),
+  public.unequip(text), public.unlock_skill(text), public.set_showcase(text[]), public.get_achievements()
   to authenticated;

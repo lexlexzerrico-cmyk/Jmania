@@ -1,6 +1,6 @@
 // Daily and weekly quests, rest days, and the claimable-count badge on the nav.
 import { $, esc, fmt, until, icon, toast } from "./ui.js";
-import { titleName } from "./catalog.js";
+import { titleName, unlockName } from "./catalog.js";
 
 let ctx = null, data = null, busy = false;
 const METRIC_ICON = { checkin: "check", reps: "dumbbell", reps_push: "dumbbell", reps_sit: "dumbbell", reps_squat: "dumbbell", sets: "scroll", cam_sets: "camera", secs: "clock", days: "calendar", records: "star", rest: "moon" };
@@ -23,7 +23,7 @@ export async function loadQuests(c) {
 
 function card(q) {
   const done = q.progress >= q.target, pct = Math.min(100, q.progress / q.target * 100);
-  const isRestable = q.id === "d_checkin" && !q.claimed && !done && !data.trained_today && !data.rested_today && data.rest_this_week < 2;
+  const isRestable = q.id === "d_checkin" && !q.claimed && !done && !data.trained_today && !data.rested_today && data.rest_this_week < (data.rest_limit || 2);
   const action = q.claimed ? `<span class="q-done">${icon("check")}Claimed</span>`
     : done ? `<button class="btn sm gold q-claim" type="button" data-claim="${q.id}">Claim</button>`
     : isRestable ? `<button class="btn sm" type="button" data-rest>${icon("moon")}Rest day</button>` : "";
@@ -52,7 +52,7 @@ function render() {
     <div class="qs-ring" style="--p:${(dDone / daily.length * 100).toFixed(0)}"><span class="num">${dDone}/${daily.length}</span></div>
     <div class="qs-body"><b>${dDone === daily.length ? "Daily quests complete" : "Today’s quests"}</b>
       <small>${owned ? `${fmt(data.quests_done)} quest rewards claimed` : `${fmt(data.quests_done)}/25 claims toward the <b>${esc(titleName("questbound"))}</b> title`}</small>
-      <small>${data.rested_today ? "Today is a rest day. Your streak is safe." : `Rest days: ${data.rest_this_week}/2 used this week. They keep your streak alive.`}</small></div>`;
+      <small>${data.rested_today ? "Today is a rest day. Your streak is safe." : `Rest days: ${data.rest_this_week}/${data.rest_limit || 2} used this week. They keep your streak alive.`}</small></div>`;
 }
 
 async function claim(id, btn) {
@@ -62,7 +62,7 @@ async function claim(id, btn) {
     ctx.setMe(r.profile);
     const el = btn.closest(".quest"); el?.classList.add("pop-claim");
     toast(`+${r.xp} XP · +${r.grit} Grit`, "good");
-    for (const u of r.unlocks || []) toast(`Title unlocked: ${titleName(u)} (+100 Grit)`, "good");
+    for (const u of r.unlocks || []) toast(`Achievement: ${unlockName(u)}`, "good");
     data = await ctx.backend.getQuests(); setBadge(data);
     setTimeout(render, 450);
   } catch (e) { toast(e.message, "bad"); btn.disabled = false; }
@@ -74,7 +74,7 @@ async function restDay(btn) {
     const r = await ctx.backend.logRestDay();
     ctx.setMe(r.profile);
     toast("Rest day logged. Streak kept.", "good");
-    for (const u of r.unlocks || []) toast(`Title unlocked: ${titleName(u)} (+100 Grit)`, "good");
+    for (const u of r.unlocks || []) toast(`Achievement: ${unlockName(u)}`, "good");
     data = await ctx.backend.getQuests(); setBadge(data); render();
   } catch (e) { toast(e.message, "bad"); btn.disabled = false; }
 }

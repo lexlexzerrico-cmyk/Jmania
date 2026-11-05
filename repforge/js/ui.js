@@ -1,5 +1,5 @@
 // Shared UI helpers: DOM, formatting, icons, rank emblems, toasts, bottom sheets.
-import { rankFor } from "./catalog.js";
+import { rankFor, item, titleName, RARITY } from "./catalog.js";
 
 export const $ = (s, r = document) => r.querySelector(s);
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -41,7 +41,13 @@ const ICONS = {
   chevl: '<path d="m15 6-6 6 6 6"/>',
   table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  skull: '<path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.3 4.6 3 5.8V20h10v-3.2c1.7-1.2 3-3.2 3-5.8a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.5" r="1.6" fill="currentColor"/><circle cx="15" cy="11.5" r="1.6" fill="currentColor"/><path d="M10 20v-2M14 20v-2"/>',
+  crown: '<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',
+  tree: '<circle cx="12" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/><circle cx="12" cy="12" r="2"/><path d="M12 7v3M10.6 13.4 7.4 17.6M13.4 13.4l3.2 4.2"/>',
+  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>'
 };
 export const icon = (n) => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ""}</svg>`;
 export function hydrateIcons(root = document) { root.querySelectorAll("svg[data-icon]").forEach((el) => { el.outerHTML = icon(el.dataset.icon); }); }
@@ -81,3 +87,29 @@ export function openSheet(html, label) {
   return wrap.firstElementChild;
 }
 export const closeSheet = () => { $("#sheet").hidden = true; };
+
+// ---- cosmetics -----------------------------------------------------------
+// Avatar with its frame. size: "sm" | "" | "lg" | "xl"
+export function avatarHTML(p, size = "", o = {}) {
+  const av = o.avatar ?? p.avatar ?? "a_letter", fr = o.frame ?? p.frame ?? "none", glyph = item(av)?.glyph;
+  const inner = glyph ? icon(glyph) : esc((p.username || "?")[0].toUpperCase());
+  return `<span class="avatar ${size}" data-frame="${esc(fr)}">${inner}</span>`;
+}
+export function nameHTML(p, o = {}) {
+  const fx = o.namefx ?? p.namefx ?? "none";
+  return `<span class="pname" data-fx="${esc(fx)}" data-text="${esc(p.username)}">${esc(p.username)}</span>`;
+}
+export function rankHTML(p, cls = "", o = {}) {
+  const fx = o.rankfx ?? p.rankfx ?? "none";
+  return `<span class="rankfx" data-fx="${esc(fx)}">${emblem(p.rp, cls)}</span>`;
+}
+export function rarityTag(r) { const x = RARITY[r] || RARITY.common; return `<span class="rarity" style="--rc:${x.color}">${x.name}</span>`; }
+
+// Profile card used in the store preview and the locker. o overrides equipped cosmetics.
+export function profileCard(p, o = {}) {
+  const bg = o.background ?? p.background ?? "none", title = o.title ?? p.title;
+  return `<div class="pcard" data-bg="${esc(bg)}">
+    <div class="pcard-in">${avatarHTML(p, "lg", o)}
+      <div class="pcard-body">${nameHTML(p, o)}<span class="pcard-title">${title && title !== "none" ? esc(titleName(title)) : ""}</span></div>
+      ${rankHTML(p, "", o)}</div></div>`;
+}

@@ -13,13 +13,13 @@ Rules that hold for every milestone: `schema.sql` stays one idempotent file that
 
 ## Milestones
 
-1. **Core progression** (this release)
+1. **Core progression** ✅ done
    - Dashboard: today/week/month/lifetime, rank, level, Grit, streak, weekly activity chart (7D/30D/12W), consistency, records, recent achievements and workouts.
    - Daily quests (1 check-in + 3 rotating) and weekly quests, claimed server-side once per period. Rest days (2 a week) keep streaks and complete the check-in.
    - Personal records with history: best set per exercise (camera sets only), best day, best week, longest session, most days in a week.
    - Training calendar with per-day detail.
    - Squats (camera-tracked by knee angle), per-player time zone (7-day change cooldown) so days reset at local midnight.
-2. **RPG progression**: skill points per level, four-branch skill tree (Discipline, Strength, Experience, Mastery), more achievements, frames, name effects and rank effects, store categories with rarity, preview and unequip.
+2. **RPG progression** ✅ done: skill points per level, four-branch skill tree (Discipline, Strength, Experience, Mastery), 24 achievements with progress, frames, avatars, name effects, rank effects, animated backgrounds, achievement showcase, store categories with rarity, live preview, two-tap purchase, equip and unequip. All checked server-side (`unlock_skill`, `equip`, `unequip`, `set_showcase`, `buy_item`).
 3. **Social**: player search, friend requests, profiles, stat comparison, rivalries over a fixed window.
 4. **Community**: guilds with owner/officer/member roles, guild levels and leaderboards; rotating world bosses whose health only the server changes.
 5. **Competitive**: seasons with their own RP, seasonal boards, end-of-season rewards and history; daily contribution caps.

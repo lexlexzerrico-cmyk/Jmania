@@ -1,9 +1,11 @@
 import cfg from "./config.js";
 import { createBackend, previewEarn, boostOn, BOARDS, localDay } from "./backend.js";
-import { RANKS, rankFor, levelFor, THEMES, ITEMS, item, titleName, EXERCISES, KINDS, recordMeta } from "./catalog.js";
+import { RANKS, rankFor, levelFor, THEMES, ITEMS, item, titleName, EXERCISES, KINDS, recordMeta, achievement, unlockName, showcaseSlots, SLOTS } from "./catalog.js";
 import { createTracker } from "./tracker.js";
 import { createSpotify } from "./spotify.js";
-import { $, esc, fmt, clock, relTime, icon, hydrateIcons, emblem, toast, openSheet, closeSheet } from "./ui.js";
+import { $, esc, fmt, clock, relTime, dayLabel, icon, hydrateIcons, emblem, toast, openSheet, closeSheet, avatarHTML, nameHTML, rankHTML } from "./ui.js";
+import { renderStore, renderLocker, bindStore } from "./store.js";
+import { loadProgression, bindProgression } from "./progression.js";
 import { loadHub, bindHub } from "./hub.js";
 import { loadQuests, bindQuests, refreshQuestBadge } from "./quests.js";
 
@@ -47,7 +49,7 @@ function applyTheme(id) {
 function renderHeader() {
   if (!me) return;
   applyTheme(me.theme);
-  $("#hAvatar").textContent = me.username[0].toUpperCase();
+  $("#hAvatar").innerHTML = avatarHTML(me);
   $("#hName").textContent = me.username;
   $("#hTitle").textContent = titleName(me.title);
   const L = levelFor(me.xp);
@@ -59,10 +61,11 @@ function renderHeader() {
 function bumpGrit() { const p = $("#hGritPill"); p.classList.remove("pop"); void p.offsetWidth; p.classList.add("pop"); }
 
 function setMe(p) { if (!p) return; me = p; renderHeader(); renderView(); }
-const appCtx = { backend, me: () => me, setMe: (p) => { me = p; renderHeader(); if (view === "train" || view === "store" || view === "me") renderView(); } };
+const appCtx = { backend, me: () => me, applyTheme: () => me && applyTheme(me.theme),
+  setMe: (p) => { me = p; renderHeader(); if (view === "train" || view === "store" || view === "me") renderView(); } };
 
 // ------------------------------------------------------------------ routing
-const VIEWS = ["train", "hub", "quests", "ranks", "store", "me"];
+const VIEWS = ["train", "hub", "quests", "skills", "ranks", "store", "me"];
 function go(v, push = true) {
   if (!VIEWS.includes(v)) v = "train";
   view = v;
@@ -74,11 +77,12 @@ function go(v, push = true) {
   if (v === "ranks") loadBoard();
   if (v === "hub" && me) loadHub(appCtx);
   if (v === "quests" && me) loadQuests(appCtx);
+  if (v === "skills" && me) loadProgression(appCtx);
 }
 function renderView() {
   if (!me) return;
   if (view === "train") renderTrain();
-  else if (view === "store") renderStore();
+  else if (view === "store") renderStore(appCtx);
   else if (view === "me") renderMe();
 }
 document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) go(g.dataset.go); });
@@ -246,7 +250,9 @@ function showReward(before, res, set) {
   const promoted = r1.i > r0.i, recs = res.records || [];
   const recHtml = recs.map((r) => { const m = recordMeta(r.key), f = (v) => m.unit === "time" ? clock(v) : fmt(v);
     return `<div class="record-hit"><span class="rh-tag">New record</span><b>${esc(m.label)}</b><span class="rh-vals"><s>${f(r.prev)}</s>${icon("chev")}<strong>${f(r.value)}</strong></span></div>`; }).join("");
-  const unlocks = (res.unlocks || []).map((id) => `<div class="unlock">${icon("star")}<div><b>${esc(titleName(id))}</b><small>New title unlocked · +100 Grit</small></div><button class="btn sm" data-equip="${id}" type="button">Equip</button></div>`).join("");
+  const unlocks = (res.unlocks || []).map((id) => { const a = achievement(id), isTitle = item(id)?.kind === "title";
+    const extra = ITEMS.filter((it) => it.granted_by === id && it.kind !== "title").map((it) => it.name).join(", ");
+    return `<div class="unlock">${icon("trophy")}<div><b>${esc(unlockName(id))}</b><small>Achievement · +${a ? a.grit : 100} Grit${isTitle ? " · new title" : ""}${extra ? ` · ${esc(extra)}` : ""}</small></div>${isTitle ? `<button class="btn sm" data-equip="${id}" type="button">Equip</button>` : ""}</div>`; }).join("");
   const sheet = $("#sheet");
   sheet.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rwTitle">
     <h2 id="rwTitle">${promoted ? "Ranked up" : recs.length ? "New record" : "Set banked"}</h2>
@@ -338,8 +344,8 @@ async function loadBoard() {
     const top = rows.slice(0, 3), rest = rows.slice(3);
     const order = [top[1], top[0], top[2]];
     $("#podium").innerHTML = rows.length >= 3 ? order.map((r, i) => r ? `<div class="panel pod p${[2, 1, 3][i]}">
-        <span class="place">${[2, 1, 3][i]}</span>${emblem(r.rp, "")}
-        <span class="nm" style="color:${nameColor(r.theme)}">${esc(r.username)}</span><span class="tt">${esc(titleName(r.title))}</span>
+        <span class="place">${[2, 1, 3][i]}</span>${avatarHTML(r, "lg")}${rankHTML(r, "sm")}
+        <span class="nm" style="color:${nameColor(r.theme)}">${nameHTML(r)}</span><span class="tt">${esc(titleName(r.title))}</span>
         <span class="val">${fmt(r.value)}<span class="unit">${unit}</span></span></div>` : "<div></div>").join("") : "";
     const list = rows.length >= 3 ? rest : rows;
     const start = rows.length >= 3 ? 4 : 1;
@@ -361,50 +367,11 @@ async function loadBoard() {
   }
 }
 function row(r, pos, unit, mine, bare) {
-  const inner = `<span class="pos">${pos}</span>${emblem(r.rp, "sm")}<span class="who-c"><span class="nm" style="color:${nameColor(r.theme)}">${esc(r.username)}${mine ? " (you)" : ""}</span><span class="tt">${esc(titleName(r.title))}</span></span><span class="val">${fmt(r.value)}<span class="unit">${unit}</span></span>`;
+  const inner = `<span class="pos">${pos}</span>${avatarHTML(r, "sm")}<span class="who-c"><span class="nm" style="color:${nameColor(r.theme)}">${nameHTML(r)}${mine ? " (you)" : ""}</span><span class="tt">${esc(titleName(r.title))}</span></span><span class="val">${fmt(r.value)}<span class="unit">${unit}</span></span>`;
   return bare ? inner : `<li class="${mine ? "mine" : ""}">${inner}</li>`;
 }
 
-// ------------------------------------------------------------------ store
-const pending = new Map();
-function buyButton(it) {
-  const can = me.grit >= it.price, armed = pending.has(it.id);
-  if (!can) return `<button class="btn sm" type="button" disabled><span class="price">${icon("coin")}${fmt(it.price)}</span></button>`;
-  return `<button class="btn sm ${armed ? "gold" : ""}" type="button" data-buy="${it.id}">${armed ? "Tap to confirm" : `<span class="price">${icon("coin")}${fmt(it.price)}</span>`}</button>`;
-}
-function renderStore() {
-  const owns = (id) => me.inventory.includes(id);
-  $("#storeBoosts").innerHTML = ITEMS.filter((i) => i.kind === "boost").map((it) => {
-    let meta = it.minutes ? `${it.minutes} min` : "Single use";
-    let on = false;
-    if (it.id === "shield") { const n = Number(me.boosts?.shield || 0); if (n) { meta = `Holding ${n}/3`; on = true; } }
-    else if (boostOn(me.boosts, it.id)) { meta = `Active · ${clock((new Date(me.boosts[it.id]) - Date.now()) / 1000)} left · buying adds time`; on = true; }
-    return `<div class="panel card"><span class="ic">${icon(it.icon)}</span><b>${esc(it.name)}</b><p>${esc(it.desc)}</p><span class="meta ${on ? "on" : ""}" data-boost-meta="${it.id}">${meta}</span>${buyButton(it)}</div>`;
-  }).join("");
-  $("#storeTitles").innerHTML = ITEMS.filter((i) => i.kind === "title" && i.price).map((it) => {
-    const own = owns(it.id), eq = me.title === it.id;
-    return `<div class="panel card ${own ? "owned" : ""}"><div class="title-plate">${esc(it.name)}</div>
-      ${own ? (eq ? `<span class="meta on">Equipped</span>` : `<button class="btn sm" type="button" data-equip="${it.id}">Equip</button>`) : buyButton(it)}</div>`;
-  }).join("");
-  $("#storeThemes").innerHTML = ITEMS.filter((i) => i.kind === "theme").map((it) => {
-    const t = THEMES[it.id], own = owns(it.id), eq = me.theme === it.id;
-    return `<div class="panel card"><div class="swatch ${t.shine ? "shine" : ""}" style="background-color:${t.color};--sw-ink:${t.ink}"></div><b>${esc(t.name)}</b>
-      ${own ? (eq ? `<span class="meta on">Equipped</span>` : `<button class="btn sm" type="button" data-equip="${it.id}">Equip</button>`) : buyButton(it)}</div>`;
-  }).join("");
-}
-document.addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-buy]");
-  if (b) {
-    const id = b.dataset.buy;
-    if (!pending.has(id)) { pending.set(id, setTimeout(() => { pending.delete(id); if (view === "store") renderStore(); }, 3000)); renderStore(); return; }
-    clearTimeout(pending.get(id)); pending.delete(id);
-    try { const r = await backend.buy(id); setMe(r.profile); toast(`${item(id).name} is yours`, "good"); }
-    catch (err) { toast(err.message, "bad"); renderStore(); }
-    return;
-  }
-  const q = e.target.closest("#view-store [data-equip], #view-me [data-equip]");
-  if (q) equip(q.dataset.equip);
-});
+// ------------------------------------------------------------------ equip (reward sheet)
 async function equip(id) {
   try { const r = await backend.equip(id); setMe(r.profile); toast(`${item(id).name} equipped`, "good"); }
   catch (err) { toast(err.message, "bad"); }
@@ -413,28 +380,48 @@ async function equip(id) {
 // ------------------------------------------------------------------ profile
 function renderMe() {
   const r = rankFor(me.rp), L = levelFor(me.xp);
-  $("#hero").innerHTML = `<span class="avatar">${esc(me.username[0].toUpperCase())}</span>
-    <div class="hero-body"><span class="hero-name">${esc(me.username)}</span><span class="hero-title">${esc(titleName(me.title))}</span>
+  $("#hero").setAttribute("data-bg", me.background || "none");
+  $("#hero").innerHTML = `<div class="hero-in">${avatarHTML(me, "xl")}
+    <div class="hero-body">${nameHTML(me)}<span class="hero-title">${me.title && me.title !== "none" ? esc(titleName(me.title)) : ""}</span>
     <div class="hero-lvl"><span>Lv ${L.level}</span><div class="bar"><i style="width:${(L.frac * 100).toFixed(1)}%"></i></div><span class="num">${fmt(L.into)}/${fmt(L.need)} XP</span></div></div>
-    ${emblem(r)}`;
+    <div class="hero-rank">${rankHTML(me, "lg")}<small>${esc(r.name)}</small></div></div>`;
+  renderShowcase();
   const stats = [["Total reps", me.total_reps ?? me.total_push + me.total_sit + (me.total_squat || 0)], ["Push-ups", me.total_push], ["Sit-ups", me.total_sit], ["Squats", me.total_squat || 0], ["Best set", me.best_set], ["Sets", me.sets_count], ["Day streak", me.streak], ["Quests done", me.quests_done || 0], ["Rest days", me.rest_count || 0]];
   $("#stats").innerHTML = stats.map(([k, v]) => `<div class="panel stat"><b>${fmt(v)}</b><span>${k}</span></div>`).join("");
-
-  $("#titleLocker").innerHTML = ITEMS.filter((i) => i.kind === "title").map((it) => {
-    const own = me.inventory.includes(it.id);
-    if (own) return `<button class="tpill" type="button" data-equip="${it.id}" aria-pressed="${me.title === it.id}">${esc(it.name)}</button>`;
-    const how = it.price ? `Buy in the store for ${fmt(it.price)} Grit` : it.earn;
-    return `<button class="tpill locked" type="button" data-how="${esc(how)}" title="${esc(how)}">${icon("lock")}${esc(it.name)}</button>`;
-  }).join("");
-  $("#themeLocker").innerHTML = ITEMS.filter((i) => i.kind === "theme").map((it) => {
-    const t = THEMES[it.id], own = me.inventory.includes(it.id);
-    return own ? `<button class="sw-btn" type="button" data-equip="${it.id}" aria-pressed="${me.theme === it.id}" aria-label="${t.name} theme" style="background:${t.color}"></button>`
-      : `<button class="sw-btn locked" type="button" data-how="${esc(`${t.name}: ${fmt(it.price)} Grit in the store`)}" aria-label="${t.name} theme, locked" style="background:${t.color}"></button>`;
-  }).join("");
+  renderLocker(appCtx);
   $("#ladder").innerHTML = RANKS.slice().reverse().map((x) => `<li class="${x.i === r.i ? "cur" : x.i < r.i ? "done" : ""}">${emblem(x, "sm")}<span>${esc(x.name)}</span><span>${fmt(x.rp)} RP</span></li>`).join("");
   renderSettings();
 }
-document.addEventListener("click", (e) => { const h = e.target.closest("[data-how]"); if (h) toast(h.dataset.how); });
+
+// Achievement showcase (Steam-style): 1 slot, 3 with the Showcase skill.
+function renderShowcase() {
+  const slots = showcaseSlots(me), ids = (me.showcase || []).filter((id) => achievement(id));
+  $("#showcase").innerHTML = Array.from({ length: slots }, (_, i) => {
+    const a = achievement(ids[i]);
+    return a ? `<div class="sc-item">${icon("trophy")}<b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div>`
+      : `<button class="sc-item empty" type="button" data-edit-showcase>${icon("sparkle")}<small>Empty slot</small></button>`;
+  }).join("") + (slots < 3 ? `<div class="sc-item hint">${icon("lock")}<small>Unlock the Showcase skill for 3 slots</small></div>` : "");
+}
+async function editShowcase() {
+  let got;
+  try { got = (await backend.getAchievements()).unlocked; } catch (e) { toast(e.message, "bad"); return; }
+  const slots = showcaseSlots(me), chosen = new Set((me.showcase || []).filter((id) => got.some((u) => u.id === id)));
+  const sheet = openSheet(`<span class="eyebrow">Showcase</span><h2>Pick ${slots === 1 ? "1 achievement" : `up to ${slots}`}</h2>
+    <div class="sc-pick" id="scPick">${got.length ? got.map((u) => { const a = achievement(u.id); return `<button class="tpill" type="button" data-sc="${u.id}" aria-pressed="${chosen.has(u.id)}">${icon("trophy")}${esc(a.name)}</button>`; }).join("")
+      : `<p class="note">Unlock achievements in Progression first.</p>`}</div>
+    <button class="btn primary" type="button" id="scSave">Save showcase</button><button class="btn ghost" type="button" data-close>Cancel</button>`, "Showcase");
+  sheet.querySelector("#scPick").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sc]"); if (!b) return;
+    const id = b.dataset.sc;
+    if (chosen.has(id)) chosen.delete(id);
+    else { if (slots === 1) chosen.clear(); if (chosen.size >= slots) { toast(`You can show ${slots}`); return; } chosen.add(id); }
+    sheet.querySelectorAll("[data-sc]").forEach((x) => x.setAttribute("aria-pressed", chosen.has(x.dataset.sc)));
+  });
+  sheet.querySelector("#scSave").addEventListener("click", async () => {
+    try { const r = await backend.setShowcase([...chosen]); setMe(r.profile); closeSheet(); toast("Showcase saved", "good"); } catch (e) { toast(e.message, "bad"); }
+  });
+}
+document.addEventListener("click", (e) => { if (e.target.closest("[data-edit-showcase]")) editShowcase(); });
 
 async function renderSettings() {
   const online = backend.mode === "online";
@@ -496,7 +483,7 @@ async function syncTimezone() {
 }
 async function boot() {
   hydrateIcons();
-  bindHub(); bindQuests();
+  bindHub(); bindQuests(); bindStore(appCtx); bindProgression();
   const net = backend.mode === "online";
   $("#navNet").textContent = net ? "Live leaderboards" : "Local mode";
   $("#navNet").classList.toggle("on", net);

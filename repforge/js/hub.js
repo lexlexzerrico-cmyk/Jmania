@@ -1,6 +1,6 @@
 // Dashboard ("Hub"): stat tiles, activity chart, consistency, personal records, calendar, recent activity.
 import { $, esc, fmt, clock, dayLabel, relTime, icon, emblem, toast, openSheet } from "./ui.js";
-import { rankFor, levelFor, EXERCISES, KINDS, RECORDS, recordMeta, titleName } from "./catalog.js";
+import { rankFor, levelFor, EXERCISES, KINDS, RECORDS, recordMeta, unlockName } from "./catalog.js";
 import { addDays, weekStart } from "./backend.js";
 
 const st = { range: "7d", table: false, month: null, selected: null, data: null, byDay: new Map(), req: 0 };
@@ -189,7 +189,7 @@ async function loadDay(day) {
     for (const s of d.sets) parts.push(`<div class="dd-row"><i class="sw" style="background:${EXERCISES[s.kind].color}"></i><span><b>${s.reps}</b> ${EXERCISES[s.kind].name.toLowerCase()}${s.source === "tap" ? ' <span class="tag">TAP</span>' : ""}</span><span class="num muted">${new Date(s.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · ${clock(s.secs)}</span></div>`);
     for (const r of d.records) { const m = recordMeta(r.key); parts.push(`<div class="dd-row gold">${icon("star")}<span>New record: ${esc(m.label)} · ${m.unit === "time" ? clock(r.value) : fmt(r.value)}</span></div>`); }
     for (const q of d.quests) parts.push(`<div class="dd-row">${icon("check")}<span>Quest: ${esc(q.title)}</span><span class="muted">+${q.xp} XP · +${q.grit} Grit</span></div>`);
-    for (const u of d.unlocks) parts.push(`<div class="dd-row gold">${icon("trophy")}<span>Unlocked title: ${esc(titleName(u))}</span></div>`);
+    for (const u of d.unlocks) parts.push(`<div class="dd-row gold">${icon("trophy")}<span>Achievement: ${esc(unlockName(u))}</span></div>`);
     el.innerHTML = `<div class="dd-head"><b>${dayLabel(day, { weekday: "long", month: "long", day: "numeric" })}</b><span class="muted num">${total ? `${fmt(total)} reps · ${d.sets.length} set${d.sets.length === 1 ? "" : "s"} · ${clock(secs)}` : ""}</span></div>
       ${parts.length ? parts.join("") : `<div class="muted">${day === st.data.today ? "Nothing logged yet today." : "Nothing logged this day."}</div>`}`;
   } catch (e) { el.innerHTML = `<div class="muted">Couldn’t load this day: ${esc(e.message)}</div>`; }
@@ -198,7 +198,7 @@ async function loadDay(day) {
 // ------------------------------------------------------------ recent
 function renderRecent() {
   const ach = [
-    ...st.data.recent_unlocks.map((u) => ({ at: u.created_at, html: `${icon("trophy")}<span>Unlocked <b>${esc(titleName(u.item_id))}</b></span>` })),
+    ...st.data.recent_unlocks.map((u) => ({ at: u.created_at, html: `${icon("trophy")}<span>Unlocked <b>${esc(unlockName(u.item_id))}</b></span>` })),
     ...st.data.recent_records.map((r) => { const m = recordMeta(r.key); return { at: r.achieved_at, html: `${icon("star")}<span>${esc(m.label)}: <b>${m.unit === "time" ? clock(r.value) : fmt(r.value)}</b></span>` }; })
   ].sort((a, b) => b.at < a.at ? -1 : 1).slice(0, 6);
   $("#hubAch").innerHTML = ach.length ? ach.map((a) => `<li>${a.html}<small>${relTime(a.at)}</small></li>`).join("") : `<li class="empty">Records and unlocked titles show up here.</li>`;

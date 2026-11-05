@@ -103,7 +103,10 @@ li span:last-child { color: var(--muted); }
 </div>
 
 <script type="module">
-import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+// MediaPipe is bundled next to this page (./mediapipe), so no CDN is needed.
+// Loaded with a dynamic import so a failure shows a message instead of killing the page.
+const MP = new URL("./mediapipe/", import.meta.url).href;
+let PoseLandmarker = null, FilesetResolver = null;
 
 const $ = (id) => document.getElementById(id);
 const video = $("video"), canvas = $("canvas"), ctx = canvas.getContext("2d");
@@ -199,14 +202,26 @@ function draw(l) {
 }
 
 // ---------- camera + model ----------
-async function loadModel() {
-  const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+let fileset = null, delegateUsed = null;
+async function loadModel(forceCPU) {
+  if (!PoseLandmarker) {
+    try { ({ PoseLandmarker, FilesetResolver } = await import(MP + "vision_bundle.mjs")); }
+    catch (e) { throw new Error("Tracking library didn’t load (" + (e.message || e) + ")"); }
+  }
+  fileset = fileset || await FilesetResolver.forVisionTasks(MP + "wasm");
   const opts = (delegate) => ({
-    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task", delegate },
+    baseOptions: { modelAssetPath: MP + "pose_landmarker_lite.task", delegate },
     runningMode: "VIDEO", numPoses: 1
   });
-  try { return await PoseLandmarker.createFromOptions(files, opts("GPU")); }
-  catch (e) { return await PoseLandmarker.createFromOptions(files, opts("CPU")); }
+  if (!forceCPU) {
+    try { const lm = await PoseLandmarker.createFromOptions(fileset, opts("GPU")); delegateUsed = "GPU"; return lm; }
+    catch (e) { console.warn("GPU tracking failed, using CPU", e); }
+  }
+  delegateUsed = "CPU";
+  return await PoseLandmarker.createFromOptions(fileset, opts("CPU"));
+}
+function withTimeout(p, ms, what) {
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + " took too long")), ms))]);
 }
 
 async function startCamera() {
@@ -222,10 +237,13 @@ async function start() {
   const btn = $("start");
   btn.disabled = true;
   try {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      throw new Error("This browser won’t allow the camera here. Open the page from its https:// link (not a downloaded file) in Safari or Chrome");
+    }
     $("coverText").textContent = "Opening camera…";
     await startCamera();
-    $("coverText").textContent = "Loading body tracking…";
-    landmarker = landmarker || await loadModel();
+    $("coverText").textContent = "Loading body tracking (about 15 MB the first time)…";
+    landmarker = landmarker || await withTimeout(loadModel(false), 90000, "Loading body tracking");
     $("cover").hidden = true;
     running = true;
     try { await navigator.wakeLock?.request("screen"); } catch (e) {}
@@ -234,20 +252,39 @@ async function start() {
     btn.disabled = false;
     $("coverText").textContent = e && e.name === "NotAllowedError"
       ? "Camera blocked. Allow camera access for this page in your browser settings, then tap Start again."
-      : "Couldn’t start: " + (e && e.message ? e.message : e) + ". Check your connection and try again.";
+      : "Couldn’t start: " + (e && e.message ? e.message : e) + ". Tap Start to try again.";
   }
 }
 
-function loop() {
+let lastTs = 0, switching = false;
+async function loop() {
   if (!running) return;
-  if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
-    lastVideoTime = video.currentTime;
-    const res = landmarker.detectForVideo(video, performance.now());
-    const l = res.landmarks && res.landmarks[0];
-    draw(l);
-    if (l) update(l); else { setPhase("Step into frame"); setMeter(0); }
+  try {
+    if (!switching && video.readyState >= 2 && video.videoWidth && video.currentTime !== lastVideoTime) {
+      if (canvas.width !== video.videoWidth) { canvas.width = video.videoWidth; canvas.height = video.videoHeight; }
+      lastVideoTime = video.currentTime;
+      const ts = Math.max(performance.now(), lastTs + 1); lastTs = ts;
+      const res = landmarker.detectForVideo(video, ts);
+      const l = res.landmarks && res.landmarks[0];
+      draw(l);
+      if (l) update(l); else { setPhase("Step into frame"); setMeter(0); }
+    }
+  } catch (e) {
+    console.error("Tracking error", e);
+    if (delegateUsed === "GPU" && !switching) {
+      // Some phones accept the GPU at load time and then fail on the first frame: retry on CPU.
+      switching = true; setPhase("Switching tracking mode…");
+      try { landmarker.close(); } catch (_) {}
+      try { landmarker = await loadModel(true); } catch (e2) { stopWithError(e2); return; }
+      switching = false;
+    } else if (!switching) { stopWithError(e); return; }
   }
   requestAnimationFrame(loop);
+}
+function stopWithError(e) {
+  running = false; try { landmarker?.close(); } catch (_) {} landmarker = null;
+  $("cover").hidden = false; $("start").disabled = false;
+  $("coverText").textContent = "Body tracking stopped: " + (e && e.message ? e.message : e) + ". Tap Start to try again.";
 }
 
 // ---------- sets ----------

@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b10">
+<meta name="description" content="Count push-ups and sit-ups with your camera, earn Grit, climb ranks and top the public leaderboards.">
+<title>REPFORGE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Teko:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/supabase.js"></script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <button class="me-chip" type="button" data-go="me" aria-label="Your profile">
+      <span class="avatar" id="hAvatar">?</span>
+      <span class="who"><b id="hName">Player</b><small id="hTitle">Rookie</small></span>
+    </button>
+    <div class="top-right">
+      <div class="lvl" title="Level">
+        <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="none" stroke="var(--line-2)" stroke-width="3"/><circle id="hLvlRing" cx="20" cy="20" r="17" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-dasharray="0 107"/></svg>
+        <span id="hLvl" class="num">1</span>
+      </div>
+      <div class="grit-pill" id="hGritPill" title="Grit"><svg class="i" data-icon="coin"></svg><b id="hGrit">0</b></div>
+    </div>
+  </header>
+
+  <main>
+    <!-- TRAIN -->
+    <section class="view" id="view-train" aria-label="Train">
+      <div class="panel rankcard" id="rankCard">
+        <span id="rcEmblem"></span>
+        <div class="rc-body">
+          <div class="rc-top"><span class="eyebrow">Season rank</span><span class="rc-rp" id="rcRp">0 RP</span></div>
+          <div class="rc-name" id="rcName">Rookie</div>
+          <div class="bar"><i id="rcBar"></i></div>
+          <div class="rc-next" id="rcNext"></div>
+        </div>
+      </div>
+
+      <button class="daily" id="daily" type="button" hidden>
+        <svg class="i" data-icon="gift"></svg>
+        <span><b>Daily drop ready</b><small id="dailyAmt"></small></span>
+        <span class="daily-cta">Claim</span>
+      </button>
+
+      <div class="chips" id="activeBoosts"></div>
+
+      <div class="seg" role="group" aria-label="Exercise">
+        <button type="button" id="exPush" aria-pressed="true">Push-ups</button>
+        <button type="button" id="exSit" aria-pressed="false">Sit-ups</button>
+      </div>
+
+      <div class="stage mirror" id="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="canvas"></canvas>
+        <div class="stage-top"><span class="live" id="liveTag" hidden>Live</span><span class="timer" id="timer">0:00</span></div>
+        <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+        <div class="stage-hud"><div class="count" id="count" aria-live="polite">0</div><div class="phase" id="phase">Ready</div></div>
+        <div class="cover" id="cover">
+          <p id="coverText">Put your phone down side-on, about 2 m away, so it sees your whole body.</p>
+          <div class="cover-actions">
+            <button class="btn primary" id="camBtn" type="button"><svg class="i" data-icon="camera"></svg>Start camera</button>
+            <button class="btn ghost" id="tapBtn" type="button">Count by tapping</button>
+          </div>
+          <small>Tap counting earns half Grit and rank points.</small>
+        </div>
+      </div>
+
+      <div class="set-actions">
+        <button class="btn" id="undoBtn" type="button" aria-label="Remove one rep">−1</button>
+        <button class="btn" id="stopBtn" type="button">Stop</button>
+        <button class="btn primary" id="finishBtn" type="button"><span>Finish set</span><small id="finishPreview">Do a rep to start</small></button>
+      </div>
+
+      <div class="panel spotify" id="spotify"></div>
+
+      <div class="panel recent">
+        <div style="padding:12px 14px 0"><h3 style="margin:0">Recent sets</h3></div>
+        <ul id="recent"></ul>
+      </div>
+    </section>
+
+    <!-- RANKS -->
+    <section class="view" id="view-ranks" aria-label="Leaderboards" hidden>
+      <div class="view-head">
+        <h2>Leaderboards</h2>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="net" id="netTag">Local</span>
+          <button class="icon-btn" id="lbRefresh" type="button" aria-label="Refresh"><svg class="i" data-icon="refresh"></svg></button>
+        </div>
+      </div>
+      <div class="seg scroll" id="lbSeg" role="group" aria-label="Leaderboard"></div>
+      <div class="podium" id="podium"></div>
+      <div class="panel"><ol class="lb" id="lbList"></ol></div>
+      <div class="lb-me" id="lbMe" hidden></div>
+      <p class="note" id="lbNote"></p>
+    </section>
+
+    <!-- STORE -->
+    <section class="view" id="view-store" aria-label="Store" hidden>
+      <div class="view-head">
+        <h2>Store</h2>
+        <div class="grit-pill big"><svg class="i" data-icon="coin"></svg><b id="sGrit">0</b></div>
+      </div>
+      <div class="panel store-earn"><svg class="i" data-icon="coin"></svg><span>Earn Grit with 1 per camera rep (½ when tapping), the daily drop, and +100 for every title you unlock. Buying takes two taps.</span></div>
+      <h3>Boosts</h3>
+      <div class="grid" id="storeBoosts"></div>
+      <h3>Titles</h3>
+      <div class="grid" id="storeTitles"></div>
+      <h3>Themes</h3>
+      <div class="grid" id="storeThemes"></div>
+    </section>
+
+    <!-- ME -->
+    <section class="view" id="view-me" aria-label="Profile" hidden>
+      <div class="panel hero" id="hero"></div>
+      <div class="stats" id="stats"></div>
+      <h3>Titles</h3>
+      <div class="locker" id="titleLocker"></div>
+      <h3>Themes</h3>
+      <div class="swatches" id="themeLocker"></div>
+      <h3>Rank ladder</h3>
+      <div class="panel"><ol class="ladder" id="ladder"></ol></div>
+      <h3>Settings</h3>
+      <div class="panel settings" id="settings"></div>
+    </section>
+  </main>
+</div>
+
+<nav class="tabs" aria-label="Main">
+  <div class="tabs-in">
+    <button class="tab" type="button" data-go="train"><svg class="i" data-icon="dumbbell"></svg>Train</button>
+    <button class="tab" type="button" data-go="ranks"><svg class="i" data-icon="trophy"></svg>Ranks</button>
+    <button class="tab" type="button" data-go="store"><svg class="i" data-icon="bag"></svg>Store</button>
+    <button class="tab" type="button" data-go="me"><svg class="i" data-icon="user"></svg>Profile</button>
+  </div>
+</nav>
+
+<div class="overlay center" id="onboard" hidden>
+  <form class="sheet" id="onboardForm">
+    <div class="brand">Rep<em>forge</em></div>
+    <p class="lead" style="margin:0">Count push-ups and sit-ups with your camera. Every rep earns Grit and rank points. Climb from Rookie to Legend on the public leaderboards.</p>
+    <label for="obName"><h3>Pick your player name</h3></label>
+    <div class="field"><input id="obName" maxlength="16" autocomplete="nickname" placeholder="e.g. PlankPhantom" required></div>
+    <small class="note" id="obNote">3-16 letters, numbers or underscores. Everyone can see it.</small>
+    <button class="btn primary" type="submit" id="obGo">Start training</button>
+  </form>
+</div>
+
+<div class="overlay" id="sheet" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

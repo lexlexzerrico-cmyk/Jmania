@@ -1,0 +1,60 @@
+# REPFORGE
+
+Count push-ups and sit-ups with your phone camera, earn **Grit**, climb from **Rookie to Legend**, and top the **public leaderboards**.
+
+- **Train**: camera body tracking counts each rep (or tap to count, for half rewards). Set timer, voice count, live rank card, daily drop, active boosts.
+- **Ranks**: public leaderboards for this week, rank points, push-ups, sit-ups and all reps, with a podium and your own position pinned.
+- **Store**: boosts (Double Grit, XP Surge, Rank Rush, Streak Shield), titles and color themes.
+- **Profile**: stats, title and theme locker, the full rank ladder, settings, account.
+- **Spotify**: shows what's playing with play/pause/skip, and pays +10% Grit while music plays.
+
+Live at `https://lexlexzerrico-cmyk.github.io/Jmania/repforge/` once GitHub Pages is on (see the bottom of this file).
+
+Until you add keys it runs in **local mode**: everything works, but progress and the leaderboard stay on that one device.
+
+---
+
+## 1. Public leaderboards (Supabase, free)
+
+1. Sign up at **supabase.com** and create a project (any name and region; save the database password somewhere).
+2. Open **SQL Editor → New query**, paste all of [`supabase/schema.sql`](supabase/schema.sql), and press **Run**. It should say "Success".
+3. Open **Authentication → Sign In / Providers** and turn on **Allow anonymous sign-ins**. Players get an account instantly with no email.
+4. Open **Authentication → URL Configuration** and set **Site URL** to `https://lexlexzerrico-cmyk.github.io/Jmania/repforge/`. Email sign-in links use this.
+5. Open **Project Settings → API** (or **Data API / API Keys**). Copy the **Project URL** and the **anon / publishable** key into [`js/config.js`](js/config.js):
+   ```js
+   SUPABASE_URL: "https://abcdxyz.supabase.co",
+   SUPABASE_ANON_KEY: "eyJhbGciOi...",
+   ```
+   The anon key is designed to be public. Never paste the `service_role` / secret key.
+6. Commit and push. The Ranks tab now says **Live**.
+
+**Why scores can be trusted:** players can read every table but can't write any of them directly. Every change goes through a database function that checks the rules: 1–300 reps per set, at most 2 reps a second, 5 seconds between sets, store prices, boost timers, streaks and title unlocks. Tap-counted sets earn half rank points.
+
+Want to wipe a cheater? In Supabase **Table Editor → profiles**, delete their row. Their sets are removed with it.
+
+## 2. Spotify (optional)
+
+1. Go to **developer.spotify.com → Dashboard → Create app**.
+2. Add this **Redirect URI** exactly: `https://lexlexzerrico-cmyk.github.io/Jmania/repforge/` (the Profile → Settings screen shows the exact one for wherever you host it). Tick **Web API**, then save.
+3. Copy the **Client ID** (not the secret) into `js/config.js` as `SPOTIFY_CLIENT_ID`, then commit and push.
+4. **Who can connect:** new Spotify apps start in *development mode*. Only accounts you add under **User Management** in the dashboard can connect. Opening it to everyone needs Spotify's extended-quota approval, which Spotify only grants to registered businesses. Everyone else can still use the whole app; they just don't get the Spotify card.
+5. Play/pause/skip needs **Spotify Premium**. Free accounts still see what's playing and still get the +10% Grit.
+
+## 3. Put it online (GitHub Pages)
+
+GitHub repo → **Settings → Pages** → *Deploy from a branch* → pick the branch with this folder, folder `/ (root)` → Save. A minute later it's at the link above. The camera only works on `https://` pages, so open the Pages link, not a downloaded file.
+
+The body-tracking files are shared with the simpler counter in [`../rep-tally/mediapipe/`](../rep-tally/mediapipe), so keep both folders.
+
+## Game rules (quick reference)
+
+| | Camera set | Tap set |
+|---|---|---|
+| Grit | 1 per rep | ½ per rep |
+| Rank points | 1 per push-up, 0.8 per sit-up | half that |
+| XP | 2 per rep | 2 per rep |
+
+- **Daily drop:** 50 Grit + 10 per streak day (up to +100).
+- **Titles you earn:** each gives +100 Grit (First Rep, Half Century, Centurion, Thousand Club, Ten-K Machine, Week Warrior, Iron Habit, Gilded, Living Legend).
+- **Ranks:** Rookie → Bronze → Silver → Gold → Platinum → Diamond → Titan (three divisions each) → Legend at 14,000 RP.
+- **Changing prices or items:** edit both `js/catalog.js` (names) and the `insert into public.items` list in `supabase/schema.sql` (prices), then re-run the SQL.

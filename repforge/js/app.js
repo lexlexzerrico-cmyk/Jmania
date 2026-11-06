@@ -7,6 +7,10 @@ import { $, esc, fmt, clock, relTime, dayLabel, icon, hydrateIcons, emblem, toas
 import { renderStore, renderLocker, bindStore } from "./store.js";
 import { loadProgression, bindProgression } from "./progression.js";
 import { loadSocial, bindSocial, refreshSocialBadge } from "./social.js";
+import { loadGuild, bindGuild, guildBoardHTML } from "./guild.js";
+import { loadBoss, bindBoss, bossCardHTML, invalidateBoss } from "./boss.js";
+import { seasonBoardHTML, bindSeason } from "./season.js";
+import { sfx } from "./sfx.js";
 import { loadHub, bindHub } from "./hub.js";
 import { loadQuests, bindQuests, refreshQuestBadge } from "./quests.js";
 
@@ -20,8 +24,8 @@ const exName = (k) => EXERCISES[k].name.toLowerCase();
 // ------------------------------------------------------------------ state
 const backend = createBackend(cfg);
 const spotify = createSpotify(cfg.SPOTIFY_CLIENT_ID);
-const prefs = Object.assign({ voice: true }, store.get("prefs", {}));
-let me = null, view = "train", board = store.get("board", "weekly");
+const prefs = Object.assign({ voice: true, sfx: true }, store.get("prefs", {}));
+let me = null, view = "train", board = store.get("board", null);
 let ex = "push", count = 0, source = null, setStart = 0, lastTap = 0, busy = false, wake = null;
 let music = null, musicOn = false;
 
@@ -66,7 +70,7 @@ const appCtx = { backend, me: () => me, applyTheme: () => me && applyTheme(me.th
   setMe: (p) => { me = p; renderHeader(); if (view === "train" || view === "store" || view === "me") renderView(); } };
 
 // ------------------------------------------------------------------ routing
-const VIEWS = ["train", "hub", "quests", "friends", "skills", "ranks", "store", "me"];
+const VIEWS = ["train", "hub", "quests", "friends", "guild", "boss", "skills", "ranks", "store", "me"];
 function go(v, push = true) {
   if (!VIEWS.includes(v)) v = "train";
   view = v;
@@ -80,7 +84,9 @@ function go(v, push = true) {
   if (v === "quests" && me) loadQuests(appCtx);
   if (v === "skills" && me) loadProgression(appCtx);
   if (v === "friends" && me) loadSocial(appCtx);
-  document.querySelector(".tab.mob")?.setAttribute("aria-current", ["skills", "store", "me"].includes(v) ? "page" : "false");
+  if (v === "guild" && me) loadGuild(appCtx);
+  if (v === "boss" && me) loadBoss(appCtx);
+  document.querySelector(".tab.mob")?.setAttribute("aria-current", ["skills", "store", "me", "guild", "boss"].includes(v) ? "page" : "false");
 }
 function renderView() {
   if (!me) return;
@@ -91,6 +97,8 @@ function renderView() {
 document.addEventListener("click", (e) => {
   const g = e.target.closest("[data-go]"); if (g) { if (g.closest("#sheet")) closeSheet(); go(g.dataset.go); return; }
   if (e.target.closest("[data-more]")) openSheet(`<span class="eyebrow">More</span><div class="more-grid">
+    <button class="panel more-item" type="button" data-go="boss">${icon("skull")}<b>World boss</b><small>Fight it with everyone</small></button>
+    <button class="panel more-item" type="button" data-go="guild">${icon("shield")}<b>Guild</b><small>Train as a team</small></button>
     <button class="panel more-item" type="button" data-go="skills">${icon("tree")}<b>Skills</b><small>Skill tree and achievements</small></button>
     <button class="panel more-item" type="button" data-go="store">${icon("bag")}<b>Store</b><small>Boosts and cosmetics</small></button>
     <button class="panel more-item" type="button" data-go="me">${icon("user")}<b>Profile</b><small>Locker, showcase, settings</small></button></div>
@@ -117,6 +125,7 @@ function renderTrain() {
   renderSpotify();
   refreshSetButtons();
   loadRecent();
+  bossCardHTML(appCtx).then((h) => { $("#bossMini").innerHTML = h; $("#bossMini").hidden = !h; });
 }
 
 function renderBoostChips() {
@@ -236,6 +245,8 @@ $("#finishBtn").addEventListener("click", async () => {
     me = res.profile; renderHeader(); bumpGrit();
     resetSet();
     showReward(before, res, { kind, reps, secs });
+    invalidateBoss();
+    if (res.contrib?.boss_fell) setTimeout(() => { sfx("boss"); toast("The world boss has fallen! Claim your reward on the Boss page.", "good"); }, 900);
     renderTrain();
     refreshQuestBadge(appCtx);
   } catch (e) { toast(e.message || String(e), "bad"); }
@@ -274,6 +285,10 @@ function showReward(before, res, set) {
       <div class="r"><b class="num" data-to="${e.rp}">0</b><span>Rank pts</span></div>
     </div>
     ${recHtml}
+    ${res.contrib && (res.contrib.boss_damage || res.contrib.season_points || res.contrib.guild_contrib) ? `<div class="contrib-row">
+      ${res.contrib.boss_damage ? `<span>${icon("skull")}<b>−${fmt(res.contrib.boss_damage)}</b> boss HP</span>` : ""}
+      ${res.contrib.season_points ? `<span>${icon("trophy")}<b>+${fmt(res.contrib.season_points)}</b> season pts</span>` : ""}
+      ${res.contrib.guild_contrib ? `<span>${icon("shield")}<b>+${fmt(res.contrib.guild_contrib)}</b> guild XP</span>` : ""}</div>` : ""}
     ${promoted ? `<div class="promo" style="--tc:${r1.tier.color}">${emblem(r1, "lg")}<div><b>${esc(r1.name)}</b><small>Promoted from ${esc(r0.name)}</small></div></div>` : ""}
     ${L1 > L0 ? `<div class="unlock" style="border-color:var(--accent)">${icon("bolt")}<div><b>Level ${L1}</b><small>You levelled up</small></div></div>` : ""}
     ${unlocks}
@@ -285,6 +300,7 @@ function showReward(before, res, set) {
   </div>`;
   hydrateIcons(sheet);
   sheet.hidden = false;
+  sfx(promoted || L1 > L0 ? "levelup" : recs.length ? "unlock" : "set");
   requestAnimationFrame(() => requestAnimationFrame(() => { const b = $("#rwBar"); if (b) b.style.width = (r1.frac * 100).toFixed(1) + "%"; }));
   sheet.querySelectorAll("[data-to]").forEach((el) => countUp(el, +el.dataset.to));
   $("#rwClose").focus();
@@ -299,7 +315,7 @@ $("#sheet").addEventListener("click", async (e) => {
   const eq = e.target.closest("[data-equip]");
   if (eq) { await equip(eq.dataset.equip); eq.outerHTML = `<span class="meta on">Equipped</span>`; }
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#sheet").hidden) $("#sheet").hidden = true; });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#sheet").hidden) closeSheet(); });
 
 // ------------------------------------------------------------------ spotify
 function renderSpotify() {
@@ -335,7 +351,7 @@ async function pollSpotify() {
 
 // ------------------------------------------------------------------ leaderboards
 function renderBoardTabs() {
-  $("#lbSeg").innerHTML = Object.entries(BOARDS).map(([k, b]) => `<button type="button" data-board="${k}" aria-pressed="${k === board}">${b.label}</button>`).join("");
+  $("#lbSeg").innerHTML = Object.entries(BOARDS).filter(([, b]) => !b.online || backend.mode === "online").map(([k, b]) => `<button type="button" data-board="${k}" aria-pressed="${k === board}">${b.label}</button>`).join("");
 }
 $("#lbSeg").addEventListener("click", (e) => { const b = e.target.closest("[data-board]"); if (b) { board = b.dataset.board; store.set("board", board); renderBoardTabs(); loadBoard(); } });
 $("#lbRefresh").addEventListener("click", () => loadBoard());
@@ -345,8 +361,19 @@ const nameColor = (theme) => (THEMES[theme] || THEMES.ember).color;
 let boardReq = 0;
 async function loadBoard() {
   const req = ++boardReq;
+  if (!board || !BOARDS[board] || (BOARDS[board].online && backend.mode !== "online")) board = backend.mode === "online" ? "season" : "weekly";
   renderBoardTabs();
   $("#podium").innerHTML = ""; $("#lbMe").hidden = true;
+  const special = board === "season" || board === "guilds";
+  $("#lbSpecial").hidden = !special; $("#lbList").parentElement.hidden = special; $("#podium").hidden = special;
+  $("#netTag").textContent = backend.mode === "online" ? "Live" : "Local"; $("#netTag").classList.toggle("on", backend.mode === "online");
+  if (special) {
+    $("#lbNote").textContent = "";
+    $("#lbSpecial").innerHTML = '<div class="skeleton" style="height:120px"></div><div class="skeleton" style="height:200px"></div>';
+    try { const h = board === "season" ? await seasonBoardHTML(appCtx) : await guildBoardHTML(appCtx); if (req === boardReq) { $("#lbSpecial").innerHTML = h; hydrateIcons($("#lbSpecial")); } }
+    catch (e) { if (req === boardReq) $("#lbSpecial").innerHTML = `<p class="note">Couldn’t load: ${esc(e.message)}</p>`; }
+    return;
+  }
   $("#lbList").innerHTML = '<li class="skeleton"></li><li class="skeleton"></li><li class="skeleton"></li>';
   try {
     const { rows, me: mine } = await backend.leaderboard(board, me);
@@ -443,6 +470,7 @@ async function renderSettings() {
        <button class="btn sm" type="button" id="spToggle">${spotify.connected ? "Disconnect" : "Connect"}</button>`;
   $("#settings").innerHTML = `
     <div class="row"><div><b>Say each rep out loud</b><small>Beeps instead when off</small></div><label class="switch"><input type="checkbox" id="setVoice" ${prefs.voice ? "checked" : ""}><span></span></label></div>
+    <div class="row"><div><b>Sound effects</b><small>Rewards, level-ups, purchases and bosses</small></div><label class="switch"><input type="checkbox" id="setSfx" ${prefs.sfx !== false ? "checked" : ""}><span></span></label></div>
     <div class="row">${sp}</div>
     <div class="row"><div><b>Player name</b><small>Shown on the leaderboards</small></div>
       <form class="field" id="renameForm"><input id="renameInput" maxlength="16" value="${esc(me.username)}" aria-label="Player name"><button class="btn sm" type="submit">Save</button></form></div>
@@ -451,6 +479,7 @@ async function renderSettings() {
       <form class="field" id="emailForm"><input id="emailInput" type="email" placeholder="you@example.com" aria-label="Email" autocomplete="email"><button class="btn sm" type="submit">Save</button></form>
       <button class="btn sm ghost" type="button" id="emailSignIn">Sign in with email instead</button></div>` : ""}`;
   $("#setVoice").onchange = (e) => { prefs.voice = e.target.checked; store.set("prefs", prefs); };
+  $("#setSfx").onchange = (e) => { prefs.sfx = e.target.checked; store.set("prefs", prefs); if (prefs.sfx) sfx("coin"); };
   const t = $("#spToggle");
   if (t) t.onclick = () => { if (spotify.connected) { spotify.disconnect(); music = null; musicOn = false; renderSettings(); toast("Spotify disconnected"); } else spotify.connect().catch((e) => toast(e.message, "bad")); };
   $("#renameForm").onsubmit = async (e) => {
@@ -495,7 +524,10 @@ async function syncTimezone() {
 }
 async function boot() {
   hydrateIcons();
-  bindHub(); bindQuests(); bindStore(appCtx); bindProgression(); bindSocial(appCtx);
+  bindHub(); bindQuests(); bindStore(appCtx); bindProgression(); bindSocial(appCtx); bindGuild(appCtx); bindBoss(appCtx); bindSeason(appCtx, () => loadBoard());
+  const showNet = () => { $("#offline").hidden = navigator.onLine; };
+  window.addEventListener("online", () => { showNet(); toast("Back online", "good"); if (me) renderView(); });
+  window.addEventListener("offline", showNet); showNet();
   const net = backend.mode === "online";
   $("#navNet").textContent = net ? "Live leaderboards" : "Local mode";
   $("#navNet").classList.toggle("on", net);

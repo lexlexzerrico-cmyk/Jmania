@@ -8,6 +8,9 @@ Count push-ups and sit-ups with your phone camera, earn **Grit**, climb from **R
 - **Progression**: a four-branch skill tree (Discipline, Strength, Experience, Mastery) paid for with skill points (one per level), and 24 achievements across six categories, each with progress and rewards.
 - **Customisation**: frames, avatars, name effects, rank effects, animated profile backgrounds, themes and titles, earned from achievements and skills or bought with Grit. Pin up to 3 achievements to your profile showcase.
 - **Friends** (online): find players by name, send and answer friend requests, see who's training right now, open any player's profile (also from the leaderboards) to compare stats side by side, and start private challenges (rivalries) with up to 7 friends for 1–14 days.
+- **Guilds** (online): found a guild (300 Grit) or join one. Owner, officer and member roles; open or invite-only with applications; members' reps level the guild; guild leaderboard and activity feed.
+- **World boss** (online): the whole community fights one boss. Every finished set deals damage, a new boss rotates in after each one falls or escapes, and everyone who hit it claims a reward.
+- **Seasons** (online): a new season every month with its own points, tiers (Bronze to Legend), leaderboard and end-of-season rewards. Your permanent rank never resets.
 - **Ranks**: public leaderboards for this week, rank points, push-ups, sit-ups and all reps, with a podium and your own position pinned.
 - **Store**: boosts, titles, frames, avatars, name and rank effects, backgrounds and themes, each with a rarity (Common to Legendary). Tap any item to preview it on your own profile; buying takes two taps. No real money, no random loot.
 - **Profile**: your card with equipped cosmetics, showcase, stats, a locker to equip or unequip everything you own, the rank ladder, settings and account.
@@ -34,6 +37,8 @@ Until you add keys it runs in **local mode**: everything works, but progress and
 6. Commit and push. The Ranks tab now says **Live**.
 
 **Upgrading:** when a new version of `schema.sql` comes out, paste and run the whole file again. It upgrades the database in place and keeps every player, set and purchase.
+
+**One daily cap for everything competitive:** guild XP, boss damage, season points and challenge scores each count at most 300 reps per player per day, so training more than that earns nothing extra. All four are computed on the server from sets it has already validated.
 
 **Challenges are fair by design:** scores are recomputed from server-checked sets inside the challenge window (never stored or sent by the app), camera-only by default, with at most 300 reps a day counted per player. Rewards (150 Grit for first, 50 for taking part) only pay out when two or more players actually trained, at most 3 times a week.
 
@@ -68,6 +73,9 @@ The body-tracking files are shared with the simpler counter in [`../rep-tally/me
 - **Titles you earn:** each gives +100 Grit (First Rep, Half Century, Centurion, Thousand Club, Ten-K Machine, Week Warrior, Iron Habit, Gilded, Living Legend, Questbound, Restwise, Record Breaker).
 - **Skill points:** one per level after the first; 36 points unlock the whole tree. Skills are permanent, and every bonus is a percentage or a one-off unlock, so none of them asks for more reps.
 - **Friends:** up to 200 each; requests are limited to 25 pending and 30 a day. Sending a request to someone who already asked you accepts it. Friends see each other's activity status (training now, trained today, rest day).
+- **Guilds:** up to 50 members, one guild per player. Owners promote/demote officers and hand over ownership; owners and officers answer applications and remove members below them.
+- **World boss:** 1 damage per camera rep, ½ per tapped rep. Rewards after it falls: 100 / 200 / 300 Grit and XP for 1+ / 100+ / 300+ damage. Health scales with how many people trained that week.
+- **Season tiers:** Bronze 0, Silver 300, Gold 900, Platinum 2,000, Diamond 4,000, Legend 7,000 SP; rewards 50–600 Grit. 300+ SP earns the Season Veteran title; top 10 with 900+ earns the Victor name effect.
 - **Personal records:** most push-ups / sit-ups / squats in one set (camera only), best day, best week, longest session (sets less than 15 minutes apart), most training days in a week.
 - **Ranks:** Rookie → Bronze → Silver → Gold → Platinum → Diamond → Titan (three divisions each) → Legend at 14,000 RP.
 - **Changing prices, items or quests:** edit both `js/catalog.js` and the matching `insert` list in `supabase/schema.sql`, then re-run the SQL.

@@ -222,6 +222,111 @@ create table if not exists public.competition_claims (
 );
 
 
+-- =================================================================== v5: guilds, world bosses, seasons
+create table if not exists public.guilds (
+  id          bigint generated always as identity primary key,
+  name        text not null check (char_length(name) between 3 and 24),
+  tag         text not null check (tag ~ '^[A-Z0-9]{2,5}$'),
+  emblem      text not null default 'shield' check (emblem in ('shield','flame','bolt','crown','skull','star','moon','dumbbell')),
+  color       text not null default '#ff8a3d' check (color ~ '^#[0-9a-f]{6}$'),
+  description text not null default '' check (char_length(description) <= 200),
+  open        boolean not null default true,
+  owner_id    uuid not null references public.profiles(id) on delete cascade,
+  xp          int not null default 0,
+  created_at  timestamptz not null default now()
+);
+create unique index if not exists guilds_name_lower on public.guilds (lower(name));
+create unique index if not exists guilds_tag on public.guilds (tag);
+
+create table if not exists public.guild_members (
+  user_id       uuid primary key references public.profiles(id) on delete cascade,   -- one guild per player
+  guild_id      bigint not null references public.guilds(id) on delete cascade,
+  role          text not null check (role in ('owner','officer','member')),
+  joined_at     timestamptz not null default now(),
+  contrib       int not null default 0,
+  contrib_day   date,
+  contrib_today int not null default 0
+);
+create index if not exists guild_members_guild on public.guild_members (guild_id);
+
+create table if not exists public.guild_applications (
+  guild_id   bigint not null references public.guilds(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (guild_id, user_id)
+);
+
+create table if not exists public.guild_events (
+  id         bigint generated always as identity primary key,
+  guild_id   bigint not null references public.guilds(id) on delete cascade,
+  user_id    uuid references public.profiles(id) on delete set null,
+  kind       text not null,
+  detail     text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists guild_events_guild on public.guild_events (guild_id, created_at desc);
+
+create table if not exists public.boss_defs (
+  id            text primary key,
+  name          text not null,
+  title         text not null,
+  color         text not null,
+  base_hp       int not null,
+  hp_per_player int not null,
+  sort          int not null
+);
+create table if not exists public.bosses (
+  id          bigint generated always as identity primary key,
+  def_id      text not null references public.boss_defs(id),
+  max_hp      int not null check (max_hp > 0),
+  starts_at   timestamptz not null default now(),
+  ends_at     timestamptz not null,
+  defeated_at timestamptz
+);
+create table if not exists public.boss_hits (
+  boss_id  bigint not null references public.bosses(id) on delete cascade,
+  user_id  uuid not null references public.profiles(id) on delete cascade,
+  damage   int not null default 0,
+  day      date,
+  day_reps int not null default 0,
+  primary key (boss_id, user_id)
+);
+create index if not exists boss_hits_boss on public.boss_hits (boss_id, damage desc);
+create table if not exists public.boss_claims (
+  boss_id    bigint not null references public.bosses(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  grit       int not null,
+  xp         int not null,
+  claimed_at timestamptz not null default now(),
+  primary key (boss_id, user_id)
+);
+
+create table if not exists public.seasons (
+  id        int primary key,
+  name      text not null,
+  starts_at timestamptz not null,
+  ends_at   timestamptz not null
+);
+create table if not exists public.season_scores (
+  season_id int not null references public.seasons(id) on delete cascade,
+  user_id   uuid not null references public.profiles(id) on delete cascade,
+  sp        int not null default 0,
+  day       date,
+  day_reps  int not null default 0,
+  primary key (season_id, user_id)
+);
+create index if not exists season_scores_rank on public.season_scores (season_id, sp desc);
+create table if not exists public.season_claims (
+  season_id  int not null references public.seasons(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  sp         int not null,
+  place      int not null,
+  tier       text not null,
+  grit       int not null,
+  claimed_at timestamptz not null default now(),
+  primary key (season_id, user_id)
+);
+
 create unique index if not exists profiles_username_lower on public.profiles (lower(username));
 create index if not exists profiles_rp_idx     on public.profiles (rp desc);
 create index if not exists profiles_push_idx   on public.profiles (total_push desc);
@@ -249,6 +354,7 @@ insert into public.items (id, kind, price, minutes, buyable, rarity, granted_by)
   ('questmaster','title',0,null,false,'epic','questmaster'), ('level25','title',0,null,false,'epic','level25'),
   ('collector','title',0,null,false,'epic','collector'),
   ('champ','title',0,null,false,'epic','champion'),
+  ('seasonvet','title',0,null,false,'rare','season_vet'),
   -- titles from capstone skills
   ('unbroken','title',0,null,false,'legendary','d5'), ('unyielding','title',0,null,false,'legendary','s5'),
   ('sage','title',0,null,false,'legendary','e5'), ('grandmaster','title',0,null,false,'legendary','m5'),
@@ -265,7 +371,8 @@ insert into public.items (id, kind, price, minutes, buyable, rarity, granted_by)
   ('shield','boost',300,null,true,'rare',null),
   -- profile frames
   ('f_iron','frame',300,null,true,'common',null), ('f_ember','frame',700,null,true,'rare',null), ('f_runic','frame',1500,null,true,'epic',null),
-  ('f_laurel','frame',0,null,false,'epic','questbound'), ('f_duelist','frame',0,null,false,'rare','rival1'), ('f_gilded','frame',0,null,false,'legendary','m2'), ('f_titan','frame',0,null,false,'legendary','s5'),
+  ('f_laurel','frame',0,null,false,'epic','questbound'), ('f_duelist','frame',0,null,false,'rare','rival1'),
+  ('f_colossus','frame',0,null,false,'epic','bossslayer'), ('n_victor','namefx',0,null,false,'legendary','season_elite'), ('f_gilded','frame',0,null,false,'legendary','m2'), ('f_titan','frame',0,null,false,'legendary','s5'),
   -- name effects
   ('n_gold','namefx',800,null,true,'rare',null), ('n_frost','namefx',800,null,true,'rare',null), ('n_fire','namefx',1600,null,true,'epic',null),
   ('n_glow','namefx',0,null,false,'epic','e5'), ('n_prism','namefx',0,null,false,'legendary','m4'),
@@ -281,6 +388,14 @@ insert into public.items (id, kind, price, minutes, buyable, rarity, granted_by)
   ('a_crown','avatar',0,null,false,'epic','gilded'), ('a_star','avatar',0,null,false,'epic','recordbreaker')
 on conflict (id) do update set kind = excluded.kind, price = excluded.price, minutes = excluded.minutes,
   buyable = excluded.buyable, rarity = excluded.rarity, granted_by = excluded.granted_by;
+
+insert into public.boss_defs (id, name, title, color, base_hp, hp_per_player, sort) values
+  ('iron',  'The Iron Colossus', 'Golem of the Old Forge',     '#9aa6b8', 1500, 120, 1),
+  ('ember', 'Ember Wyrm',        'Serpent of the Ash Pits',    '#ff6a3d', 1800, 140, 2),
+  ('frost', 'The Frost Titan',   'Warden of the Long Winter',  '#86d8ff', 2000, 150, 3),
+  ('void',  'Void Warden',       'Keeper of the Empty Hour',   '#b07dff', 2200, 160, 4)
+on conflict (id) do update set name = excluded.name, title = excluded.title, color = excluded.color,
+  base_hp = excluded.base_hp, hp_per_player = excluded.hp_per_player, sort = excluded.sort;
 
 -- Skill tree. Bonuses are flat percentages or one-off unlocks: none of them asks for more reps.
 insert into public.skill_defs (id, branch, tier, cost, requires, name, description) values
@@ -334,7 +449,11 @@ insert into public.achievement_defs (id, category, name, description, grit, sort
   ('collector','Collection','Collector','Own 10 cosmetics',150,50),
   ('friend1','Social','Squad Up','Add your first friend',100,60),
   ('rival1','Social','Worthy Rival','Finish a challenge with friends',100,61),
-  ('champion','Social','Champion','Win a challenge',150,62)
+  ('champion','Social','Champion','Win a challenge',150,62),
+  ('guild1','Social','Banner Bearer','Join or found a guild',100,63),
+  ('bossslayer','Events','Boss Slayer','Help defeat a world boss',150,70),
+  ('season_vet','Seasons','Season Veteran','Finish a season with 300+ season points',100,80),
+  ('season_elite','Seasons','Season Elite','Finish a season in the top 10 with 900+ points',200,81)
 on conflict (id) do update set category = excluded.category, name = excluded.name, description = excluded.description,
   grit = excluded.grit, sort = excluded.sort;
 
@@ -469,6 +588,7 @@ language sql stable security definer set search_path = public as $$
       when 'capstone'      then exists (select 1 from skill_defs s where s.id = any(p.skills) and s.tier = 5)
       when 'friend1'       then exists (select 1 from friends f where f.user_id = p.id)
       when 'rival1'        then p.comp_done >= 1
+      when 'guild1'        then exists (select 1 from guild_members gm where gm.user_id = p.id)
       when 'champion'      then p.comp_wins >= 1
       when 'collector'     then (select count(*) from items i where i.id = any(p.inventory) and i.kind in ('frame','namefx','rankfx','background','avatar') and i.granted_by is distinct from 'default') >= 10
       else false end
@@ -562,7 +682,7 @@ declare
   today date; wk date; cam boolean := p_source = 'cam';
   v_rp int; v_xp int; v_grit int; g0 int; v_set bigint; v_sess timestamptz;
   last_set public.sets;
-  unl text[] := '{}'; recs jsonb := '[]'; r int; a text; i int; n_rec int;
+  unl text[] := '{}'; recs jsonb := '[]'; r int; a text; i int; n_rec int; extra jsonb;
 begin
   p := public._me();
   today := public._local_today(p.tz); wk := public._week_start(today);
@@ -640,11 +760,14 @@ begin
   where id = p.id
   returning * into p;
 
+  extra := public._contribute(p, p_kind, p_reps, cam, today);    -- world boss, season, guild (capped per day)
+
   return jsonb_build_object(
     'profile', to_jsonb(p),
     'earned', jsonb_build_object('rp', v_rp, 'xp', v_xp, 'grit', v_grit, 'bonus', p.grit - g0),
     'unlocks', to_jsonb(unl),
-    'records', recs);
+    'records', recs,
+    'contrib', extra);
 end $$;
 
 create or replace function public.log_rest_day() returns jsonb
@@ -1147,6 +1270,376 @@ begin
   return jsonb_build_object('profile', to_jsonb(p), 'place', place, 'grit', g, 'score', my, 'unlocks', to_jsonb(unl));
 end $$;
 
+-- =================================================================== guilds, bosses, seasons: helpers
+create or replace function public._glevel(xp int) returns int language sql immutable as $$ select public._level(xp / 5) $$;
+
+create or replace function public._season_tier(sp int) returns text language sql immutable as $$
+  select case when sp >= 7000 then 'legend' when sp >= 4000 then 'diamond' when sp >= 2000 then 'platinum'
+              when sp >= 900 then 'gold' when sp >= 300 then 'silver' else 'bronze' end $$;
+
+-- The current season (one per calendar month, UTC), created on first use.
+create or replace function public._season() returns public.seasons
+language plpgsql security definer set search_path = public as $$
+declare s public.seasons; m timestamptz := date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'; n int;
+begin
+  n := (extract(year from m at time zone 'UTC')::int - 2026) * 12 + extract(month from m at time zone 'UTC')::int - 10;
+  select * into s from seasons where id = n;
+  if found then return s; end if;
+  insert into seasons (id, name, starts_at, ends_at)
+  values (n, 'Season ' || n || ' · ' || (array['Ember','Frost','Storm','Iron','Dawn','Night'])[1 + ((n - 1) % 6 + 6) % 6], m, m + interval '1 month')
+  on conflict (id) do nothing;
+  select * into s from seasons where id = n;
+  return s;
+end $$;
+
+-- The current world boss, spawning the next one in the rotation when the last escaped or fell 12 hours ago.
+create or replace function public._boss() returns public.bosses
+language plpgsql security definer set search_path = public as $$
+declare b public.bosses; d public.boss_defs; active int;
+begin
+  select * into b from bosses order by id desc limit 1;
+  if found and now() < b.ends_at and (b.defeated_at is null or now() < b.defeated_at + interval '12 hours') then return b; end if;
+  perform pg_advisory_xact_lock(4242);
+  select * into b from bosses order by id desc limit 1;     -- re-check under the lock
+  if found and now() < b.ends_at and (b.defeated_at is null or now() < b.defeated_at + interval '12 hours') then return b; end if;
+  select * into d from boss_defs where sort > coalesce((select sort from boss_defs where id = b.def_id), 0) order by sort limit 1;
+  if not found then select * into d from boss_defs order by sort limit 1; end if;
+  select count(distinct user_id) into active from sets where created_at > now() - interval '7 days';
+  insert into bosses (def_id, max_hp, ends_at) values (d.id, greatest(d.base_hp, d.hp_per_player * active), now() + interval '7 days')
+  returning * into b;
+  return b;
+end $$;
+
+-- Called by submit_set: credits a set to the boss, the season and the guild.
+-- Each counts at most 300 reps per player per day, so nobody is rewarded for overdoing it.
+create or replace function public._contribute(p public.profiles, kind text, reps int, cam boolean, today date) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare b public.bosses; s public.seasons; h public.boss_hits; sc public.season_scores; gm public.guild_members;
+  credit int; dmg int := 0; spg int := 0; gc int := 0; total int; fell boolean := false;
+begin
+  -- world boss
+  b := public._boss();
+  if b.defeated_at is null and now() < b.ends_at then
+    insert into boss_hits (boss_id, user_id) values (b.id, p.id) on conflict do nothing;
+    select * into h from boss_hits where boss_id = b.id and user_id = p.id for update;
+    if h.day is distinct from today then h.day_reps := 0; end if;
+    credit := greatest(0, least(reps, 300 - h.day_reps));
+    dmg := round(credit * (case when cam then 1.0 else 0.5 end));
+    update boss_hits set damage = damage + dmg, day = today, day_reps = h.day_reps + credit where boss_id = b.id and user_id = p.id;
+    select sum(damage) into total from boss_hits where boss_id = b.id;
+    if total >= b.max_hp then update bosses set defeated_at = now() where id = b.id and defeated_at is null; fell := found; end if;
+  end if;
+  -- season points (same weights as rank points)
+  s := public._season();
+  insert into season_scores (season_id, user_id) values (s.id, p.id) on conflict do nothing;
+  select * into sc from season_scores where season_id = s.id and user_id = p.id for update;
+  if sc.day is distinct from today then sc.day_reps := 0; end if;
+  credit := greatest(0, least(reps, 300 - sc.day_reps));
+  spg := round(credit * (case when kind = 'push' then 1.0 else 0.8 end) * (case when cam then 1.0 else 0.5 end));
+  update season_scores set sp = sp + spg, day = today, day_reps = sc.day_reps + credit where season_id = s.id and user_id = p.id;
+  -- guild
+  select * into gm from guild_members where user_id = p.id for update;
+  if found then
+    if gm.contrib_day is distinct from today then gm.contrib_today := 0; end if;
+    gc := greatest(0, least(reps, 300 - gm.contrib_today));
+    update guild_members set contrib = contrib + gc, contrib_day = today, contrib_today = gm.contrib_today + gc where user_id = p.id;
+    update guilds set xp = xp + gc where id = gm.guild_id;
+  end if;
+  return jsonb_build_object('boss_damage', dmg, 'boss_fell', fell, 'season_points', spg, 'guild_contrib', gc);
+end $$;
+
+create or replace function public._guild_role(uid uuid, gid bigint) returns text
+language sql stable security definer set search_path = public as $$ select role from guild_members where user_id = uid and guild_id = gid $$;
+
+create or replace function public._guild_event(gid bigint, uid uuid, k text, d text default '') returns void
+language sql security definer set search_path = public as $$ insert into guild_events (guild_id, user_id, kind, detail) values (gid, uid, k, d) $$;
+
+create or replace function public._guild_card(g public.guilds) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', g.id, 'name', g.name, 'tag', g.tag, 'emblem', g.emblem, 'color', g.color, 'description', g.description,
+    'open', g.open, 'xp', g.xp, 'level', public._glevel(g.xp), 'owner_id', g.owner_id, 'created_at', g.created_at,
+    'members', (select count(*) from guild_members where guild_id = g.id),
+    'week_reps', (select coalesce(sum(s.reps), 0) from sets s join guild_members m on m.user_id = s.user_id
+                  where m.guild_id = g.id and s.created_at > greatest(now() - interval '7 days', m.joined_at)))
+$$;
+
+-- =================================================================== guild actions
+create or replace function public.create_guild(p_name text, p_tag text, p_emblem text, p_color text, p_description text, p_open boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; gid bigint; unl text[];
+begin
+  p := public._me();
+  p_name := trim(coalesce(p_name, '')); p_tag := upper(trim(coalesce(p_tag, '')));
+  if exists (select 1 from guild_members where user_id = p.id) then raise exception 'Leave your guild first'; end if;
+  if char_length(p_name) < 3 or char_length(p_name) > 24 then raise exception 'Guild names are 3-24 characters'; end if;
+  if p_tag !~ '^[A-Z0-9]{2,5}$' then raise exception 'Tags are 2-5 letters or numbers'; end if;
+  if exists (select 1 from guilds where lower(name) = lower(p_name)) then raise exception 'That guild name is taken'; end if;
+  if exists (select 1 from guilds where tag = p_tag) then raise exception 'That tag is taken'; end if;
+  if p.grit < 300 then raise exception 'Founding a guild costs 300 Grit'; end if;
+  insert into guilds (name, tag, emblem, color, description, open, owner_id)
+  values (p_name, p_tag, coalesce(p_emblem, 'shield'), lower(coalesce(p_color, '#ff8a3d')), left(coalesce(p_description, ''), 200), coalesce(p_open, true), p.id)
+  returning id into gid;
+  insert into guild_members (user_id, guild_id, role) values (p.id, gid, 'owner');
+  update profiles set grit = grit - 300 where id = p.id;
+  perform public._guild_event(gid, p.id, 'founded', p_name);
+  unl := public._award_user(p.id, 'guild');
+  return jsonb_build_object('id', gid, 'unlocks', to_jsonb(unl), 'profile', (select to_jsonb(x) from profiles x where x.id = p.id));
+end $$;
+
+create or replace function public.join_guild(p_guild bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; g public.guilds; unl text[];
+begin
+  p := public._me();
+  select * into g from guilds where id = p_guild;
+  if not found then raise exception 'Guild not found'; end if;
+  if exists (select 1 from guild_members where user_id = p.id) then raise exception 'Leave your guild first'; end if;
+  if (select count(*) from guild_members where guild_id = g.id) >= 50 then raise exception 'That guild is full (50 members)'; end if;
+  if not g.open then
+    if (select count(*) from guild_applications where user_id = p.id) >= 5 then raise exception 'You have 5 applications waiting'; end if;
+    insert into guild_applications (guild_id, user_id) values (g.id, p.id) on conflict do nothing;
+    return jsonb_build_object('status', 'applied');
+  end if;
+  insert into guild_members (user_id, guild_id, role) values (p.id, g.id, 'member');
+  delete from guild_applications where user_id = p.id;
+  perform public._guild_event(g.id, p.id, 'joined');
+  unl := public._award_user(p.id, 'guild');
+  return jsonb_build_object('status', 'joined', 'unlocks', to_jsonb(unl));
+end $$;
+
+create or replace function public.cancel_guild_application(p_guild bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  p := public._me();
+  delete from guild_applications where guild_id = p_guild and user_id = p.id;
+  if not found then raise exception 'No application to cancel'; end if;
+  return jsonb_build_object('status', 'cancelled');
+end $$;
+
+create or replace function public.respond_guild_application(p_user uuid, p_accept boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; gid bigint;
+begin
+  p := public._me();
+  select guild_id into gid from guild_members where user_id = p.id and role in ('owner','officer');
+  if not found then raise exception 'Only owners and officers can answer applications'; end if;
+  delete from guild_applications where guild_id = gid and user_id = p_user;
+  if not found then raise exception 'Application not found'; end if;
+  if p_accept then
+    if exists (select 1 from guild_members where user_id = p_user) then raise exception 'They joined another guild'; end if;
+    if (select count(*) from guild_members where guild_id = gid) >= 50 then raise exception 'Your guild is full'; end if;
+    insert into guild_members (user_id, guild_id, role) values (p_user, gid, 'member');
+    delete from guild_applications where user_id = p_user;
+    perform public._guild_event(gid, p_user, 'joined');
+    perform public._award_user(p_user, 'guild');
+  end if;
+  return jsonb_build_object('status', case when p_accept then 'accepted' else 'declined' end);
+end $$;
+
+create or replace function public.leave_guild() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; m public.guild_members;
+begin
+  p := public._me();
+  select * into m from guild_members where user_id = p.id;
+  if not found then raise exception 'You''re not in a guild'; end if;
+  if m.role = 'owner' then
+    if (select count(*) from guild_members where guild_id = m.guild_id) > 1 then raise exception 'Hand ownership to another member first'; end if;
+    delete from guilds where id = m.guild_id;      -- last member out closes the guild
+    return jsonb_build_object('status', 'disbanded');
+  end if;
+  delete from guild_members where user_id = p.id;
+  perform public._guild_event(m.guild_id, p.id, 'left');
+  return jsonb_build_object('status', 'left');
+end $$;
+
+-- Owner: promote/demote officers, hand over ownership. Owner and officers: remove members below them.
+create or replace function public.manage_member(p_user uuid, p_action text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; me public.guild_members; t public.guild_members;
+begin
+  p := public._me();
+  select * into me from guild_members where user_id = p.id;
+  if not found then raise exception 'You''re not in a guild'; end if;
+  select * into t from guild_members where user_id = p_user and guild_id = me.guild_id;
+  if not found then raise exception 'They''re not in your guild'; end if;
+  if p_user = p.id then raise exception 'You can''t do that to yourself'; end if;
+  if p_action = 'kick' then
+    if not (me.role = 'owner' or (me.role = 'officer' and t.role = 'member')) then raise exception 'You can only remove members below your rank'; end if;
+    delete from guild_members where user_id = p_user;
+    perform public._guild_event(me.guild_id, p_user, 'removed');
+  elsif p_action in ('promote','demote','transfer') then
+    if me.role <> 'owner' then raise exception 'Only the owner can change roles'; end if;
+    if p_action = 'promote' then update guild_members set role = 'officer' where user_id = p_user;
+    elsif p_action = 'demote' then update guild_members set role = 'member' where user_id = p_user;
+    else
+      update guild_members set role = 'officer' where user_id = p.id;
+      update guild_members set role = 'owner' where user_id = p_user;
+      update guilds set owner_id = p_user where id = me.guild_id;
+    end if;
+    perform public._guild_event(me.guild_id, p_user, p_action);
+  else raise exception 'Unknown action'; end if;
+  return jsonb_build_object('status', 'ok');
+end $$;
+
+create or replace function public.update_guild(p_description text, p_emblem text, p_color text, p_open boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; me public.guild_members;
+begin
+  p := public._me();
+  select * into me from guild_members where user_id = p.id;
+  if not found or me.role not in ('owner','officer') then raise exception 'Only owners and officers can edit the guild'; end if;
+  update guilds set description = left(coalesce(p_description, description), 200),
+    emblem = case when me.role = 'owner' then coalesce(p_emblem, emblem) else emblem end,
+    color = case when me.role = 'owner' then lower(coalesce(p_color, color)) else color end,
+    open = case when me.role = 'owner' then coalesce(p_open, open) else open end
+  where id = me.guild_id;
+  perform public._guild_event(me.guild_id, p.id, 'edited');
+  return jsonb_build_object('status', 'ok');
+end $$;
+
+create or replace function public.get_guilds(p_q text default '') returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; q text := trim(coalesce(p_q, ''));
+begin
+  p := public._me_read();
+  q := replace(replace(replace(q, '\', '\\'), '%', '\%'), '_', '\_');
+  return jsonb_build_object(
+    'mine', (select guild_id from guild_members where user_id = p.id),
+    'applied', (select coalesce(jsonb_agg(guild_id), '[]') from guild_applications where user_id = p.id),
+    'guilds', (select coalesce(jsonb_agg(x order by (x->>'week_reps')::int desc, (x->>'xp')::int desc), '[]') from (
+      select public._guild_card(g) x from guilds g where q = '' or g.name ilike '%' || q || '%' or g.tag ilike q || '%' limit 50) t));
+end $$;
+
+create or replace function public.get_guild(p_guild bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; g public.guilds; myrole text;
+begin
+  p := public._me_read();
+  select * into g from guilds where id = p_guild;
+  if not found then raise exception 'Guild not found'; end if;
+  myrole := public._guild_role(p.id, g.id);
+  return public._guild_card(g) || jsonb_build_object(
+    'my_role', myrole,
+    'applied', exists (select 1 from guild_applications where guild_id = g.id and user_id = p.id),
+    'rank', 1 + (select count(*) from guilds o where o.xp > g.xp),
+    'members_list', (select coalesce(jsonb_agg(public._public(o) || jsonb_build_object('role', m.role, 'contrib', m.contrib, 'joined_at', m.joined_at,
+                       'week_reps', (select coalesce(sum(reps), 0) from sets s where s.user_id = o.id and s.created_at > greatest(now() - interval '7 days', m.joined_at)))
+                       order by case m.role when 'owner' then 0 when 'officer' then 1 else 2 end, m.contrib desc), '[]')
+                     from guild_members m join profiles o on o.id = m.user_id where m.guild_id = g.id),
+    'events', (select coalesce(jsonb_agg(x order by x.created_at desc), '[]') from (
+                 select e.kind, e.detail, e.created_at, o.username from guild_events e left join profiles o on o.id = e.user_id
+                 where e.guild_id = g.id order by e.created_at desc limit 20) x),
+    'recent_sets', case when myrole is null then '[]'::jsonb else (select coalesce(jsonb_agg(x order by x.created_at desc), '[]') from (
+                 select s.kind, s.reps, s.created_at, o.username from sets s join guild_members m on m.user_id = s.user_id join profiles o on o.id = s.user_id
+                 where m.guild_id = g.id and s.created_at >= m.joined_at order by s.created_at desc limit 12) x) end,
+    'applications', case when myrole in ('owner','officer') then (select coalesce(jsonb_agg(public._public(o) || jsonb_build_object('at', a.created_at) order by a.created_at), '[]')
+                     from guild_applications a join profiles o on o.id = a.user_id where a.guild_id = g.id) else '[]'::jsonb end);
+end $$;
+
+-- =================================================================== world boss
+create or replace function public.get_boss() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; b public.bosses; d public.boss_defs; dealt int;
+begin
+  p := public._me_read();
+  b := public._boss();
+  select * into d from boss_defs where id = b.def_id;
+  select coalesce(sum(damage), 0) into dealt from boss_hits where boss_id = b.id;
+  return jsonb_build_object(
+    'id', b.id, 'def', d.id, 'name', d.name, 'title', d.title, 'color', d.color, 'max_hp', b.max_hp,
+    'hp', greatest(0, b.max_hp - dealt), 'starts_at', b.starts_at, 'ends_at', b.ends_at, 'defeated_at', b.defeated_at,
+    'fighters', (select count(*) from boss_hits where boss_id = b.id and damage > 0),
+    'my_damage', coalesce((select damage from boss_hits where boss_id = b.id and user_id = p.id), 0),
+    'my_today', coalesce((select case when day = public._local_today(p.tz) then day_reps else 0 end from boss_hits where boss_id = b.id and user_id = p.id), 0),
+    'top', (select coalesce(jsonb_agg(public._public(o) || jsonb_build_object('damage', h.damage) order by h.damage desc), '[]') from (
+              select * from boss_hits where boss_id = b.id and damage > 0 order by damage desc limit 20) h join profiles o on o.id = h.user_id),
+    'guilds', (select coalesce(jsonb_agg(x order by (x->>'damage')::int desc), '[]') from (
+              select jsonb_build_object('id', g.id, 'name', g.name, 'tag', g.tag, 'emblem', g.emblem, 'color', g.color, 'damage', sum(h.damage)) x
+              from boss_hits h join guild_members m on m.user_id = h.user_id join guilds g on g.id = m.guild_id
+              where h.boss_id = b.id group by g.id order by sum(h.damage) desc limit 10) t),
+    'claimable', (select coalesce(jsonb_agg(jsonb_build_object('id', bb.id, 'name', dd.name, 'damage', h.damage)), '[]')
+              from bosses bb join boss_defs dd on dd.id = bb.def_id join boss_hits h on h.boss_id = bb.id and h.user_id = p.id
+              where bb.defeated_at is not null and h.damage > 0 and not exists (select 1 from boss_claims c where c.boss_id = bb.id and c.user_id = p.id)),
+    'history', (select coalesce(jsonb_agg(x order by (x->>'id')::bigint desc), '[]') from (
+              select jsonb_build_object('id', bb.id, 'name', dd.name, 'defeated', bb.defeated_at is not null, 'ends_at', bb.ends_at,
+                'my_damage', coalesce((select damage from boss_hits where boss_id = bb.id and user_id = p.id), 0)) x
+              from bosses bb join boss_defs dd on dd.id = bb.def_id where bb.id <> b.id order by bb.id desc limit 5) t));
+end $$;
+
+-- Rewards for a defeated boss you hit: 100 / 200 / 300 Grit and XP for 1+ / 100+ / 300+ damage. Once per boss.
+create or replace function public.claim_boss(p_boss bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; b public.bosses; dmg int; g int; today date; unl text[] := '{}'; a text; i int;
+begin
+  p := public._me();
+  today := public._local_today(p.tz);
+  select * into b from bosses where id = p_boss;
+  if not found then raise exception 'Boss not found'; end if;
+  if b.defeated_at is null then raise exception 'That boss hasn''t fallen'; end if;
+  select damage into dmg from boss_hits where boss_id = b.id and user_id = p.id;
+  if coalesce(dmg, 0) <= 0 then raise exception 'You didn''t fight this boss'; end if;
+  if exists (select 1 from boss_claims where boss_id = b.id and user_id = p.id) then raise exception 'Reward already claimed'; end if;
+  g := case when dmg >= 300 then 300 when dmg >= 100 then 200 else 100 end;
+  insert into boss_claims (boss_id, user_id, grit, xp) values (b.id, p.id, g, g);
+  p.grit := p.grit + g; p.xp := p.xp + g;
+  if not exists (select 1 from unlocks where user_id = p.id and item_id = 'bossslayer') then unl := unl || 'bossslayer'::text; end if;
+  p := public._unlock(p, 'bossslayer', 'boss', today);
+  update profiles set grit = p.grit, xp = p.xp, inventory = p.inventory where id = p.id;
+  unl := unl || public._award_user(p.id, 'boss');
+  return jsonb_build_object('grit', g, 'xp', g, 'unlocks', to_jsonb(unl), 'profile', (select to_jsonb(x) from profiles x where x.id = p.id));
+end $$;
+
+-- =================================================================== seasons
+create or replace function public.get_season() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; s public.seasons; mine int;
+begin
+  p := public._me_read();
+  s := public._season();
+  mine := coalesce((select sp from season_scores where season_id = s.id and user_id = p.id), 0);
+  return jsonb_build_object(
+    'id', s.id, 'name', s.name, 'starts_at', s.starts_at, 'ends_at', s.ends_at,
+    'my_sp', mine, 'my_tier', public._season_tier(mine),
+    'my_place', case when mine > 0 then 1 + (select count(*) from season_scores where season_id = s.id and sp > mine) end,
+    'players', (select count(*) from season_scores where season_id = s.id and sp > 0),
+    'my_today', coalesce((select case when day = public._local_today(p.tz) then day_reps else 0 end from season_scores where season_id = s.id and user_id = p.id), 0),
+    'top', (select coalesce(jsonb_agg(public._public(o) || jsonb_build_object('sp', x.sp, 'tier', public._season_tier(x.sp)) order by x.sp desc), '[]') from (
+              select * from season_scores where season_id = s.id and sp > 0 order by sp desc limit 100) x join profiles o on o.id = x.user_id),
+    'history', (select coalesce(jsonb_agg(jsonb_build_object('id', ss.id, 'name', ss.name, 'ends_at', ss.ends_at, 'sp', sc.sp,
+                  'tier', public._season_tier(sc.sp), 'claimed', (select to_jsonb(c) from season_claims c where c.season_id = ss.id and c.user_id = p.id))
+                  order by ss.id desc), '[]')
+                from seasons ss join season_scores sc on sc.season_id = ss.id and sc.user_id = p.id where ss.ends_at <= now() and sc.sp > 0));
+end $$;
+
+-- End-of-season reward by tier, once. 300+ SP earns Season Veteran; top 10 with 900+ earns Season Elite.
+create or replace function public.claim_season(p_season int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; s public.seasons; mine int; place int; tier text; g int; today date; unl text[] := '{}'; had text[];
+begin
+  p := public._me();
+  today := public._local_today(p.tz);
+  select * into s from seasons where id = p_season;
+  if not found then raise exception 'Season not found'; end if;
+  if s.ends_at > now() then raise exception 'That season is still running'; end if;
+  mine := coalesce((select sp from season_scores where season_id = s.id and user_id = p.id), 0);
+  if mine <= 0 then raise exception 'You didn''t score in that season'; end if;
+  if exists (select 1 from season_claims where season_id = s.id and user_id = p.id) then raise exception 'Reward already claimed'; end if;
+  place := 1 + (select count(*) from season_scores where season_id = s.id and sp > mine);
+  tier := public._season_tier(mine);
+  g := case tier when 'legend' then 600 when 'diamond' then 450 when 'platinum' then 300 when 'gold' then 200 when 'silver' then 100 else 50 end;
+  insert into season_claims (season_id, user_id, sp, place, tier, grit) values (s.id, p.id, mine, place, tier, g);
+  p.grit := p.grit + g;
+  had := array(select item_id from unlocks where user_id = p.id);
+  if mine >= 300 then p := public._unlock(p, 'season_vet', 'season', today); end if;
+  if place <= 10 and mine >= 900 then p := public._unlock(p, 'season_elite', 'season', today); end if;
+  unl := array(select item_id from unlocks where user_id = p.id and not (item_id = any(had)));
+  update profiles set grit = p.grit, inventory = p.inventory where id = p.id;
+  return jsonb_build_object('grit', g, 'place', place, 'tier', tier, 'sp', mine, 'unlocks', to_jsonb(unl),
+    'profile', (select to_jsonb(x) from profiles x where x.id = p.id));
+end $$;
+
 -- =================================================================== reading history
 -- Everything the dashboard and calendar need for the last p_days days, in one call.
 create or replace function public.get_dashboard(p_days int default 400) returns jsonb
@@ -1270,6 +1763,17 @@ alter table public.friends enable row level security;
 alter table public.competitions enable row level security;
 alter table public.competition_members enable row level security;
 alter table public.competition_claims enable row level security;
+alter table public.guilds enable row level security;
+alter table public.guild_members enable row level security;
+alter table public.guild_applications enable row level security;
+alter table public.guild_events enable row level security;
+alter table public.boss_defs enable row level security;
+alter table public.bosses enable row level security;
+alter table public.boss_hits enable row level security;
+alter table public.boss_claims enable row level security;
+alter table public.seasons enable row level security;
+alter table public.season_scores enable row level security;
+alter table public.season_claims enable row level security;
 
 drop policy if exists "Anyone can read profiles"   on public.profiles;
 drop policy if exists "Anyone can read sets"       on public.sets;
@@ -1292,6 +1796,29 @@ create policy "Players read own friends"     on public.friends for select using 
 create policy "Members read competitions"    on public.competitions for select using (exists (select 1 from public.competition_members m where m.comp_id = id and m.user_id = auth.uid()));
 create policy "Players read own memberships" on public.competition_members for select using (user_id = auth.uid());
 create policy "Players read own claims c"    on public.competition_claims for select using (user_id = auth.uid());
+drop policy if exists "Anyone can read guilds" on public.guilds;
+create policy "Anyone can read guilds" on public.guilds for select using (true);
+drop policy if exists "Anyone can read guild_members" on public.guild_members;
+create policy "Anyone can read guild_members" on public.guild_members for select using (true);
+drop policy if exists "Anyone can read guild_events" on public.guild_events;
+create policy "Anyone can read guild_events" on public.guild_events for select using (true);
+drop policy if exists "Anyone can read boss_defs" on public.boss_defs;
+create policy "Anyone can read boss_defs" on public.boss_defs for select using (true);
+drop policy if exists "Anyone can read bosses" on public.bosses;
+create policy "Anyone can read bosses" on public.bosses for select using (true);
+drop policy if exists "Anyone can read boss_hits" on public.boss_hits;
+create policy "Anyone can read boss_hits" on public.boss_hits for select using (true);
+drop policy if exists "Anyone can read seasons" on public.seasons;
+create policy "Anyone can read seasons" on public.seasons for select using (true);
+drop policy if exists "Anyone can read season_scores" on public.season_scores;
+create policy "Anyone can read season_scores" on public.season_scores for select using (true);
+drop policy if exists "Players read own guild_applications" on public.guild_applications;
+create policy "Players read own guild_applications" on public.guild_applications for select using (user_id = auth.uid());
+drop policy if exists "Players read own boss_claims" on public.boss_claims;
+create policy "Players read own boss_claims" on public.boss_claims for select using (user_id = auth.uid());
+drop policy if exists "Players read own season_claims" on public.season_claims;
+create policy "Players read own season_claims" on public.season_claims for select using (user_id = auth.uid());
+
 create policy "Anyone can read achievements" on public.achievement_defs for select using (true);
 create policy "Anyone can read profiles"   on public.profiles     for select using (true);
 create policy "Anyone can read sets"       on public.sets         for select using (true);
@@ -1305,8 +1832,11 @@ create policy "Players read own claims"    on public.quest_claims for select usi
 revoke insert, update, delete, truncate on
   public.profiles, public.sets, public.items, public.rest_days, public.records,
   public.quest_defs, public.quest_claims, public.unlocks, public.skill_defs, public.achievement_defs,
-  public.friend_requests, public.friends, public.competitions, public.competition_members, public.competition_claims
+  public.friend_requests, public.friends, public.competitions, public.competition_members, public.competition_claims,
+  public.guilds, public.guild_members, public.guild_applications, public.guild_events, public.boss_defs, public.bosses, public.boss_hits, public.boss_claims, public.seasons, public.season_scores, public.season_claims
   from anon, authenticated;
+grant select on public.guilds, public.guild_members, public.guild_events, public.boss_defs, public.bosses, public.boss_hits, public.seasons, public.season_scores to anon, authenticated;
+grant select on public.guild_applications, public.boss_claims, public.season_claims to authenticated;
 grant select on public.friend_requests, public.friends, public.competitions, public.competition_members, public.competition_claims to authenticated;
 grant select on
   public.profiles, public.sets, public.items, public.rest_days, public.records,
@@ -1321,7 +1851,9 @@ revoke execute on function
   public._has(public.profiles, text), public._level(int), public._sp_free(public.profiles), public._ach_due(public.profiles, date),
   public._quest_grit(public.profiles, public.quest_defs), public._quest_xp(public.profiles, public.quest_defs),
   public._award_user(uuid, text), public._comp_score(public.competitions, uuid), public._public(public.profiles),
-  public._relation(uuid, uuid), public._activity(public.profiles), public._befriend(uuid, uuid)
+  public._relation(uuid, uuid), public._activity(public.profiles), public._befriend(uuid, uuid),
+  public._glevel(int), public._season_tier(int), public._season(), public._boss(), public._contribute(public.profiles, text, int, boolean, date),
+  public._guild_role(uuid, bigint), public._guild_event(bigint, uuid, text, text), public._guild_card(public.guilds)
   from public, anon, authenticated;
 
 -- player actions: signed-in players only
@@ -1333,7 +1865,11 @@ revoke execute on function
   public.search_players(text), public.send_friend_request(uuid), public.respond_friend_request(bigint, boolean),
   public.cancel_friend_request(bigint), public.remove_friend(uuid), public.get_social(), public.get_player(uuid),
   public.create_competition(text, text, int, boolean, uuid[]), public.respond_competition(bigint, boolean),
-  public.leave_competition(bigint), public.get_competitions(), public.claim_competition(bigint)
+  public.leave_competition(bigint), public.get_competitions(), public.claim_competition(bigint),
+  public.create_guild(text, text, text, text, text, boolean), public.join_guild(bigint), public.cancel_guild_application(bigint),
+  public.respond_guild_application(uuid, boolean), public.leave_guild(), public.manage_member(uuid, text),
+  public.update_guild(text, text, text, boolean), public.get_guilds(text), public.get_guild(bigint),
+  public.get_boss(), public.claim_boss(bigint), public.get_season(), public.claim_season(int)
   from public, anon;
 grant execute on function
   public.create_profile(text), public.set_timezone(text), public.submit_set(text, int, int, text, boolean),
@@ -1343,5 +1879,9 @@ grant execute on function
   public.search_players(text), public.send_friend_request(uuid), public.respond_friend_request(bigint, boolean),
   public.cancel_friend_request(bigint), public.remove_friend(uuid), public.get_social(), public.get_player(uuid),
   public.create_competition(text, text, int, boolean, uuid[]), public.respond_competition(bigint, boolean),
-  public.leave_competition(bigint), public.get_competitions(), public.claim_competition(bigint)
+  public.leave_competition(bigint), public.get_competitions(), public.claim_competition(bigint),
+  public.create_guild(text, text, text, text, text, boolean), public.join_guild(bigint), public.cancel_guild_application(bigint),
+  public.respond_guild_application(uuid, boolean), public.leave_guild(), public.manage_member(uuid, text),
+  public.update_guild(text, text, text, boolean), public.get_guilds(text), public.get_guild(bigint),
+  public.get_boss(), public.claim_boss(bigint), public.get_season(), public.claim_season(int)
   to authenticated;

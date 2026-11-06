@@ -42,6 +42,8 @@
         </div>
       </div>
 
+      <div id="bossMini" hidden></div>
+
       <button class="daily" id="daily" type="button" hidden>
         <svg class="i" data-icon="gift"></svg>
         <span><b>Daily drop ready</b><small id="dailyAmt"></small></span>
@@ -144,6 +146,18 @@
       <div class="social-body" id="socialBody"></div>
     </section>
 
+    <!-- GUILD -->
+    <section class="view" id="view-guild" aria-label="Guild" hidden>
+      <div class="view-head"><h2>Guild</h2></div>
+      <div class="social-body" id="guildBody"></div>
+    </section>
+
+    <!-- WORLD BOSS -->
+    <section class="view" id="view-boss" aria-label="World boss" hidden>
+      <div class="view-head"><h2>World boss</h2></div>
+      <div class="social-body" id="bossBody"></div>
+    </section>
+
     <!-- PROGRESSION -->
     <section class="view" id="view-skills" aria-label="Progression" hidden>
       <div class="view-head"><h2>Progression</h2>
@@ -172,6 +186,7 @@
         </div>
       </div>
       <div class="seg scroll" id="lbSeg" role="group" aria-label="Leaderboard"></div>
+      <div class="lb-special" id="lbSpecial" hidden></div>
       <div class="podium" id="podium"></div>
       <div class="panel"><ol class="lb" id="lbList"></ol></div>
       <div class="lb-me" id="lbMe" hidden></div>
@@ -213,6 +228,8 @@
     <button class="tab" type="button" data-go="hub"><svg class="i" data-icon="chart"></svg><span>Hub</span></button>
     <button class="tab" type="button" data-go="quests"><svg class="i" data-icon="scroll"></svg><span>Quests</span><b class="q-badge" hidden>0</b></button>
     <button class="tab" type="button" data-go="friends"><svg class="i" data-icon="users"></svg><span>Friends</span><b class="q-badge s-badge" hidden>0</b></button>
+    <button class="tab desk" type="button" data-go="guild"><svg class="i" data-icon="shield"></svg><span>Guild</span></button>
+    <button class="tab desk" type="button" data-go="boss"><svg class="i" data-icon="skull"></svg><span>World boss</span></button>
     <button class="tab desk" type="button" data-go="skills"><svg class="i" data-icon="tree"></svg><span>Skills</span></button>
     <button class="tab" type="button" data-go="ranks"><svg class="i" data-icon="trophy"></svg><span>Ranks</span></button>
     <button class="tab desk" type="button" data-go="store"><svg class="i" data-icon="bag"></svg><span>Store</span></button>
@@ -235,5 +252,6 @@
 
 <div class="overlay" id="sheet" hidden></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="offline" id="offline" role="status" hidden>You’re offline. Sets and rewards need a connection; everything will refresh when you’re back.</div>
 </body>
 </html>

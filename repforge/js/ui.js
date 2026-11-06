@@ -1,5 +1,6 @@
 // Shared UI helpers: DOM, formatting, icons, rank emblems, toasts, bottom sheets.
 import { rankFor, item, titleName, RARITY } from "./catalog.js";
+import { sfx } from "./sfx.js";
 
 export const $ = (s, r = document) => r.querySelector(s);
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -74,21 +75,34 @@ export function emblem(rp, cls = "") {
 export function toast(msg, kind = "") {
   const el = document.createElement("div");
   el.className = "toast " + kind; el.textContent = msg;
+  if (kind === "bad") sfx("error"); else if (kind === "good") sfx(/^Achievement|unlocked|Title/i.test(msg) ? "unlock" : "coin");
   $("#toasts").appendChild(el);
   setTimeout(() => { el.style.transition = "opacity .3s"; el.style.opacity = "0"; setTimeout(() => el.remove(), 300); }, kind === "bad" ? 4200 : 2600);
 }
 
-// One bottom sheet for the whole app. Returns the sheet element.
+// One bottom sheet for the whole app. Keeps focus inside while open and returns it on close.
+let lastFocus = null;
 export function openSheet(html, label) {
   const wrap = $("#sheet");
+  if (wrap.hidden) lastFocus = document.activeElement;
   wrap.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(label || "Details")}">${html}</div>`;
   hydrateIcons(wrap);
   wrap.hidden = false;
-  const focusable = wrap.querySelector("button, [href], input");
-  focusable?.focus();
+  (wrap.querySelector("input, button:not([disabled]), [href]"))?.focus({ preventScroll: true });
   return wrap.firstElementChild;
 }
-export const closeSheet = () => { $("#sheet").hidden = true; };
+document.addEventListener("keydown", (e) => {
+  const wrap = $("#sheet"); if (e.key !== "Tab" || !wrap || wrap.hidden) return;
+  const f = [...wrap.querySelectorAll('button:not([disabled]), input, [href], [tabindex="0"]')].filter((x) => x.offsetParent);
+  if (!f.length) return;
+  if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+  else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+});
+export const closeSheet = () => { $("#sheet").hidden = true; try { lastFocus?.focus({ preventScroll: true }); } catch (e) {} };
+
+export function guildBadge(g, size = "") {
+  return `<span class="gbadge ${size}" style="--gc:${esc(g.color || "#ff8a3d")}">${icon(g.emblem || "shield")}</span>`;
+}
 
 // ---- cosmetics -----------------------------------------------------------
 // Avatar with its frame. size: "sm" | "" | "lg" | "xl"

@@ -4,6 +4,8 @@
 import { item, ITEMS, EXERCISES, KINDS, QUESTS, ACHIEVEMENTS, achievement, skill, has, spFree, showcaseSlots, cosmeticsOwned, levelFor, owns } from "./catalog.js";
 
 const BOARDS = {
+  season: { label: "Season",    col: "sp", online: true },
+  guilds: { label: "Guilds",    col: "week_reps", online: true },
   weekly: { label: "This week", col: "reps" },
   rank:   { label: "Rank",      col: "rp" },
   push:   { label: "Push-ups",  col: "total_push" },
@@ -328,6 +330,10 @@ class LocalBackend {
   cancelFriendRequest() { return this._online(); } removeFriend() { return this._online(); } getSocial() { return this._online(); }
   getPlayer() { return this._online(); } createCompetition() { return this._online(); } respondCompetition() { return this._online(); }
   leaveCompetition() { return this._online(); } getCompetitions() { return this._online(); } claimCompetition() { return this._online(); }
+  getGuilds() { return this._online(); } getGuild() { return this._online(); } createGuild() { return this._online(); } joinGuild() { return this._online(); }
+  cancelGuildApplication() { return this._online(); } respondGuildApplication() { return this._online(); } leaveGuild() { return this._online(); }
+  manageMember() { return this._online(); } updateGuild() { return this._online(); } getBoss() { return this._online(); } claimBoss() { return this._online(); }
+  getSeason() { return this._online(); } claimSeason() { return this._online(); }
   async leaderboard(board) {
     const d = this._load(); if (!d) return { rows: [], me: null };
     const p = this._fix(d.profile), col = BOARDS[board].col;
@@ -345,7 +351,11 @@ class SupaBackend {
     this.sb = window.supabase.createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" } });
     this.uid = null;
   }
-  _err(error) { if (error) throw new Error(error.message || String(error)); }
+  _err(error) {
+    if (!error) return;
+    const m = error.message || String(error);
+    throw new Error(/failed to fetch|networkerror|load failed|network request failed/i.test(m) ? "Can’t reach the server. Check your connection and try again." : m);
+  }
   async _rpc(fn, args) { const { data, error } = await this.sb.rpc(fn, args); this._err(error); return data; }
   async init() {
     const { data } = await this.sb.auth.getSession();
@@ -393,6 +403,20 @@ class SupaBackend {
   leaveCompetition(id) { return this._rpc("leave_competition", { p_comp: id }); }
   getCompetitions() { return this._rpc("get_competitions"); }
   claimCompetition(id) { return this._rpc("claim_competition", { p_comp: id }); }
+  // guilds, world boss, seasons (online only)
+  getGuilds(q = "") { return this._rpc("get_guilds", { p_q: q }); }
+  getGuild(id) { return this._rpc("get_guild", { p_guild: id }); }
+  createGuild({ name, tag, emblem, color, description, open }) { return this._rpc("create_guild", { p_name: name, p_tag: tag, p_emblem: emblem, p_color: color, p_description: description, p_open: open }); }
+  joinGuild(id) { return this._rpc("join_guild", { p_guild: id }); }
+  cancelGuildApplication(id) { return this._rpc("cancel_guild_application", { p_guild: id }); }
+  respondGuildApplication(user, accept) { return this._rpc("respond_guild_application", { p_user: user, p_accept: accept }); }
+  leaveGuild() { return this._rpc("leave_guild"); }
+  manageMember(user, action) { return this._rpc("manage_member", { p_user: user, p_action: action }); }
+  updateGuild({ description, emblem, color, open }) { return this._rpc("update_guild", { p_description: description, p_emblem: emblem, p_color: color, p_open: open }); }
+  getBoss() { return this._rpc("get_boss"); }
+  claimBoss(id) { return this._rpc("claim_boss", { p_boss: id }); }
+  getSeason() { return this._rpc("get_season"); }
+  claimSeason(id) { return this._rpc("claim_season", { p_season: id }); }
   async leaderboard(board, me) {
     const col = BOARDS[board].col;
     if (board === "weekly") {

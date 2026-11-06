@@ -20,7 +20,7 @@ Rules that hold for every milestone: `schema.sql` stays one idempotent file that
    - Training calendar with per-day detail.
    - Squats (camera-tracked by knee angle), per-player time zone (7-day change cooldown) so days reset at local midnight.
 2. **RPG progression** ✅ done: skill points per level, four-branch skill tree (Discipline, Strength, Experience, Mastery), 24 achievements with progress, frames, avatars, name effects, rank effects, animated backgrounds, achievement showcase, store categories with rarity, live preview, two-tap purchase, equip and unequip. All checked server-side (`unlock_skill`, `equip`, `unequip`, `set_showcase`, `buy_item`).
-3. **Social**: player search, friend requests, profiles, stat comparison, rivalries over a fixed window.
+3. **Social** ✅ done: player search, friend requests (send, accept, decline, cancel, auto-accept on crossing requests), remove friend, activity status, public player profiles with side-by-side comparison, rivalries / private challenges with server-computed, capped scores and once-only rewards (`search_players`, `send_friend_request`, `respond_friend_request`, `get_social`, `get_player`, `create_competition`, `claim_competition`, …). Tested end to end with two browsers against the real SQL.
 4. **Community**: guilds with owner/officer/member roles, guild levels and leaderboards; rotating world bosses whose health only the server changes.
 5. **Competitive**: seasons with their own RP, seasonal boards, end-of-season rewards and history; daily contribution caps.
 6. **Polish**: sound, motion, performance, accessibility, migration and security test pass.

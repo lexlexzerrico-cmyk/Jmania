@@ -80,6 +80,7 @@ export const ITEMS = [
   { id: "questmaster",   kind: "title", name: "Quest Master",    rarity: "epic", granted_by: "questmaster" },
   { id: "level25",       kind: "title", name: "Veteran Soul",    rarity: "epic", granted_by: "level25" },
   { id: "collector",     kind: "title", name: "Collector",       rarity: "epic", granted_by: "collector" },
+  { id: "champ",         kind: "title", name: "Champion",        rarity: "epic", granted_by: "champion" },
   // titles from capstone skills
   { id: "unbroken",      kind: "title", name: "Unbroken",        rarity: "legendary", granted_by: "d5" },
   { id: "unyielding",    kind: "title", name: "Unyielding",      rarity: "legendary", granted_by: "s5" },
@@ -111,6 +112,7 @@ export const ITEMS = [
   { id: "f_ember",  kind: "frame", name: "Ember",  price: 700,  rarity: "rare", desc: "A ring of slow-burning embers." },
   { id: "f_runic",  kind: "frame", name: "Runic",  price: 1500, rarity: "epic", desc: "Carved runes that turn slowly." },
   { id: "f_laurel", kind: "frame", name: "Laurel", rarity: "epic", granted_by: "questbound", desc: "Green-gold laurels for finishing what you start." },
+  { id: "f_duelist", kind: "frame", name: "Duelist", rarity: "rare", granted_by: "rival1", desc: "Crossed steel for finishing a challenge." },
   { id: "f_gilded", kind: "frame", name: "Gilded", rarity: "legendary", granted_by: "m2", desc: "Polished gold with a travelling shine." },
   { id: "f_titan",  kind: "frame", name: "Titan",  rarity: "legendary", granted_by: "s5", desc: "Heavy forged plates in crimson and violet." },
   // name effects
@@ -180,7 +182,10 @@ export const ACHIEVEMENTS = [
   { id: "level25",       cat: "Progression", name: "Veteran Soul",   desc: "Reach level 25", grit: 150,                     prog: (p) => [levelFor(p.xp).level, 25] },
   { id: "apprentice",    cat: "Progression", name: "Apprentice",     desc: "Unlock your first skill",                       prog: (p) => [(p.skills || []).length, 1] },
   { id: "capstone",      cat: "Progression", name: "Capstone",       desc: "Unlock the last skill in any branch", grit: 150 },
-  { id: "collector",     cat: "Collection",  name: "Collector",      desc: "Own 10 cosmetics", grit: 150,                   prog: (p) => [cosmeticsOwned(p), 10] }
+  { id: "collector",     cat: "Collection",  name: "Collector",      desc: "Own 10 cosmetics", grit: 150,                   prog: (p) => [cosmeticsOwned(p), 10] },
+  { id: "friend1",       cat: "Social",      name: "Squad Up",       desc: "Add your first friend" },
+  { id: "rival1",        cat: "Social",      name: "Worthy Rival",   desc: "Finish a challenge with friends",               prog: (p) => [p.comp_done || 0, 1] },
+  { id: "champion",      cat: "Social",      name: "Champion",       desc: "Win a challenge", grit: 150,                    prog: (p) => [p.comp_wins || 0, 1] }
 ].map((a) => ({ grit: 100, ...a }));
 export const achievement = (id) => ACHIEVEMENTS.find((a) => a.id === id);
 export const unlockName = (id) => achievement(id)?.name || item(id)?.name || id;

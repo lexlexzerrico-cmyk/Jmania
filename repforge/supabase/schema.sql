@@ -165,6 +165,63 @@ create table if not exists public.achievement_defs (
   sort        int  not null default 0
 );
 
+-- =================================================================== v4: friends and rivalries
+alter table public.profiles add column if not exists comp_done int not null default 0;
+alter table public.profiles add column if not exists comp_wins int not null default 0;
+
+create table if not exists public.friend_requests (
+  id           bigint generated always as identity primary key,
+  from_id      uuid not null references public.profiles(id) on delete cascade,
+  to_id        uuid not null references public.profiles(id) on delete cascade,
+  status       text not null default 'pending' check (status in ('pending','accepted','declined','cancelled')),
+  created_at   timestamptz not null default now(),
+  responded_at timestamptz,
+  check (from_id <> to_id)
+);
+-- at most one open request between two players, whichever direction
+create unique index if not exists friend_requests_open on public.friend_requests (least(from_id, to_id), greatest(from_id, to_id)) where status = 'pending';
+create index if not exists friend_requests_to on public.friend_requests (to_id, status);
+
+create table if not exists public.friends (
+  user_id   uuid not null references public.profiles(id) on delete cascade,
+  friend_id uuid not null references public.profiles(id) on delete cascade,
+  since     timestamptz not null default now(),
+  primary key (user_id, friend_id),
+  check (user_id <> friend_id)
+);
+
+create table if not exists public.competitions (
+  id         bigint generated always as identity primary key,
+  owner_id   uuid not null references public.profiles(id) on delete cascade,
+  name       text not null check (char_length(name) between 3 and 40),
+  metric     text not null check (metric in ('reps','push','sit','squat','days')),
+  cam_only   boolean not null default true,
+  daily_cap  int not null default 300,
+  starts_at  timestamptz not null default now(),
+  ends_at    timestamptz not null,
+  created_at timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+
+create table if not exists public.competition_members (
+  comp_id   bigint not null references public.competitions(id) on delete cascade,
+  user_id   uuid not null references public.profiles(id) on delete cascade,
+  status    text not null check (status in ('invited','joined','declined','left')),
+  joined_at timestamptz,
+  primary key (comp_id, user_id)
+);
+create index if not exists competition_members_user on public.competition_members (user_id, status);
+
+create table if not exists public.competition_claims (
+  comp_id    bigint not null references public.competitions(id) on delete cascade,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  place      int not null,
+  grit       int not null,
+  claimed_at timestamptz not null default now(),
+  primary key (comp_id, user_id)
+);
+
+
 create unique index if not exists profiles_username_lower on public.profiles (lower(username));
 create index if not exists profiles_rp_idx     on public.profiles (rp desc);
 create index if not exists profiles_push_idx   on public.profiles (total_push desc);
@@ -191,6 +248,7 @@ insert into public.items (id, kind, price, minutes, buyable, rarity, granted_by)
   ('triple','title',0,null,false,'common','triple'), ('dawn','title',0,null,false,'rare','dawn'), ('night','title',0,null,false,'rare','night'),
   ('questmaster','title',0,null,false,'epic','questmaster'), ('level25','title',0,null,false,'epic','level25'),
   ('collector','title',0,null,false,'epic','collector'),
+  ('champ','title',0,null,false,'epic','champion'),
   -- titles from capstone skills
   ('unbroken','title',0,null,false,'legendary','d5'), ('unyielding','title',0,null,false,'legendary','s5'),
   ('sage','title',0,null,false,'legendary','e5'), ('grandmaster','title',0,null,false,'legendary','m5'),
@@ -207,7 +265,7 @@ insert into public.items (id, kind, price, minutes, buyable, rarity, granted_by)
   ('shield','boost',300,null,true,'rare',null),
   -- profile frames
   ('f_iron','frame',300,null,true,'common',null), ('f_ember','frame',700,null,true,'rare',null), ('f_runic','frame',1500,null,true,'epic',null),
-  ('f_laurel','frame',0,null,false,'epic','questbound'), ('f_gilded','frame',0,null,false,'legendary','m2'), ('f_titan','frame',0,null,false,'legendary','s5'),
+  ('f_laurel','frame',0,null,false,'epic','questbound'), ('f_duelist','frame',0,null,false,'rare','rival1'), ('f_gilded','frame',0,null,false,'legendary','m2'), ('f_titan','frame',0,null,false,'legendary','s5'),
   -- name effects
   ('n_gold','namefx',800,null,true,'rare',null), ('n_frost','namefx',800,null,true,'rare',null), ('n_fire','namefx',1600,null,true,'epic',null),
   ('n_glow','namefx',0,null,false,'epic','e5'), ('n_prism','namefx',0,null,false,'legendary','m4'),
@@ -273,7 +331,10 @@ insert into public.achievement_defs (id, category, name, description, grit, sort
   ('level25','Progression','Veteran Soul','Reach level 25',150,43),
   ('apprentice','Progression','Apprentice','Unlock your first skill',100,44),
   ('capstone','Progression','Capstone','Unlock the last skill in any branch',150,45),
-  ('collector','Collection','Collector','Own 10 cosmetics',150,50)
+  ('collector','Collection','Collector','Own 10 cosmetics',150,50),
+  ('friend1','Social','Squad Up','Add your first friend',100,60),
+  ('rival1','Social','Worthy Rival','Finish a challenge with friends',100,61),
+  ('champion','Social','Champion','Win a challenge',150,62)
 on conflict (id) do update set category = excluded.category, name = excluded.name, description = excluded.description,
   grit = excluded.grit, sort = excluded.sort;
 
@@ -406,6 +467,9 @@ language sql stable security definer set search_path = public as $$
       when 'level25'       then public._level(p.xp) >= 25
       when 'apprentice'    then cardinality(p.skills) >= 1
       when 'capstone'      then exists (select 1 from skill_defs s where s.id = any(p.skills) and s.tier = 5)
+      when 'friend1'       then exists (select 1 from friends f where f.user_id = p.id)
+      when 'rival1'        then p.comp_done >= 1
+      when 'champion'      then p.comp_wins >= 1
       when 'collector'     then (select count(*) from items i where i.id = any(p.inventory) and i.kind in ('frame','namefx','rankfx','background','avatar') and i.granted_by is distinct from 'default') >= 10
       else false end
 $$;
@@ -811,6 +875,278 @@ begin
     'level', public._level(p.xp));
 end $$;
 
+-- =================================================================== social helpers
+-- Unlocks whatever achievements a player now qualifies for (used for the *other* player in social actions).
+create or replace function public._award_user(uid uuid, src text) returns text[]
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; unl text[] := '{}'; a text; i int; today date;
+begin
+  select * into p from public.profiles where id = uid for update;
+  if not found then return unl; end if;
+  today := public._local_today(p.tz);
+  for i in 1..2 loop
+    foreach a in array public._ach_due(p, today) loop p := public._unlock(p, a, src, today); unl := unl || a; end loop;
+  end loop;
+  if cardinality(unl) > 0 then update public.profiles set inventory = p.inventory, grit = p.grit where id = uid; end if;
+  return unl;
+end $$;
+
+-- A competitor's score: legitimate sets inside the window, at most daily_cap reps counted per day.
+create or replace function public._comp_score(c public.competitions, uid uuid) returns int
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(case when c.metric = 'days' then 1 else least(v, c.daily_cap) end), 0)::int
+  from (select s.local_day, sum(s.reps) v from public.sets s
+        where s.user_id = uid and s.created_at >= c.starts_at and s.created_at < c.ends_at
+          and (not c.cam_only or s.source = 'cam')
+          and (c.metric in ('reps','days') or s.kind = c.metric)
+        group by s.local_day) d
+$$;
+
+-- What other players may see about someone (public profile fields only).
+create or replace function public._public(p public.profiles) returns jsonb
+language sql stable as $$
+  select jsonb_build_object('id', p.id, 'username', p.username, 'title', p.title, 'theme', p.theme, 'avatar', p.avatar,
+    'frame', p.frame, 'namefx', p.namefx, 'rankfx', p.rankfx, 'background', p.background, 'rp', p.rp, 'xp', p.xp,
+    'streak', p.streak, 'total_push', p.total_push, 'total_sit', p.total_sit, 'total_squat', p.total_squat,
+    'total_reps', p.total_reps, 'best_set', p.best_set, 'sets_count', p.sets_count, 'showcase', p.showcase,
+    'comp_wins', p.comp_wins, 'created_at', p.created_at)
+$$;
+
+create or replace function public._relation(me uuid, them uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select case
+    when me = them then 'self'
+    when exists (select 1 from friends where user_id = me and friend_id = them) then 'friend'
+    when exists (select 1 from friend_requests where from_id = me and to_id = them and status = 'pending') then 'outgoing'
+    when exists (select 1 from friend_requests where from_id = them and to_id = me and status = 'pending') then 'incoming'
+    else 'none' end
+$$;
+
+-- "Training now" / "Trained today" / "Rest day" / last seen, like a chat app's status dot.
+create or replace function public._activity(p public.profiles) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'status', case
+      when (select max(created_at) from sets where user_id = p.id) > now() - interval '15 minutes' then 'training'
+      when exists (select 1 from sets where user_id = p.id and local_day = public._local_today(p.tz)) then 'trained'
+      when exists (select 1 from rest_days where user_id = p.id and day = public._local_today(p.tz)) then 'resting'
+      else 'idle' end,
+    'last_set_at', (select max(created_at) from sets where user_id = p.id),
+    'week_reps', (select coalesce(sum(reps), 0) from sets where user_id = p.id and created_at > now() - interval '7 days'))
+$$;
+
+-- =================================================================== friends
+create or replace function public.search_players(p_q text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; q text;
+begin
+  p := public._me_read();
+  q := trim(coalesce(p_q, ''));
+  if char_length(q) < 2 then raise exception 'Type at least 2 characters'; end if;
+  q := replace(replace(replace(q, '\', '\\'), '%', '\%'), '_', '\_');
+  return (select coalesce(jsonb_agg(x order by x->>'starts' desc, x->>'username'), '[]') from (
+    select public._public(o) || jsonb_build_object('relation', public._relation(p.id, o.id), 'starts', lower(o.username) like lower(q) || '%') x
+    from public.profiles o where o.id <> p.id and o.username ilike '%' || q || '%'
+    order by (lower(o.username) like lower(q) || '%') desc, o.rp desc limit 20) t);
+end $$;
+
+create or replace function public._befriend(a uuid, b uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if (select count(*) from friends where user_id = a) >= 200 or (select count(*) from friends where user_id = b) >= 200 then
+    raise exception 'Friend lists are capped at 200';
+  end if;
+  insert into friends (user_id, friend_id) values (a, b), (b, a) on conflict do nothing;
+end $$;
+
+create or replace function public.send_friend_request(p_user uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; inc public.friend_requests; unl text[];
+begin
+  p := public._me();
+  if p_user = p.id then raise exception 'That''s you'; end if;
+  if not exists (select 1 from profiles where id = p_user) then raise exception 'Player not found'; end if;
+  if exists (select 1 from friends where user_id = p.id and friend_id = p_user) then raise exception 'You''re already friends'; end if;
+  if exists (select 1 from friend_requests where from_id = p.id and to_id = p_user and status = 'pending') then raise exception 'Request already sent'; end if;
+  -- they already asked you: sending back accepts it
+  select * into inc from friend_requests where from_id = p_user and to_id = p.id and status = 'pending';
+  if found then
+    update friend_requests set status = 'accepted', responded_at = now() where id = inc.id;
+    perform public._befriend(p.id, p_user);
+    unl := public._award_user(p.id, 'social'); perform public._award_user(p_user, 'social');
+    return jsonb_build_object('status', 'accepted', 'unlocks', to_jsonb(unl));
+  end if;
+  if (select count(*) from friend_requests where from_id = p.id and status = 'pending') >= 25 then raise exception 'You have 25 requests waiting. Cancel some first'; end if;
+  if (select count(*) from friend_requests where from_id = p.id and created_at > now() - interval '1 day') >= 30 then raise exception 'That''s enough requests for today'; end if;
+  insert into friend_requests (from_id, to_id) values (p.id, p_user);
+  return jsonb_build_object('status', 'sent');
+end $$;
+
+create or replace function public.respond_friend_request(p_request bigint, p_accept boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; r public.friend_requests; unl text[] := '{}';
+begin
+  p := public._me();
+  select * into r from friend_requests where id = p_request for update;
+  if not found or r.to_id <> p.id then raise exception 'Request not found'; end if;
+  if r.status <> 'pending' then raise exception 'That request was already answered'; end if;
+  update friend_requests set status = case when p_accept then 'accepted' else 'declined' end, responded_at = now() where id = r.id;
+  if p_accept then
+    perform public._befriend(p.id, r.from_id);
+    unl := public._award_user(p.id, 'social'); perform public._award_user(r.from_id, 'social');
+  end if;
+  return jsonb_build_object('status', case when p_accept then 'accepted' else 'declined' end, 'unlocks', to_jsonb(unl));
+end $$;
+
+create or replace function public.cancel_friend_request(p_request bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  p := public._me();
+  update friend_requests set status = 'cancelled', responded_at = now() where id = p_request and from_id = p.id and status = 'pending';
+  if not found then raise exception 'Request not found'; end if;
+  return jsonb_build_object('status', 'cancelled');
+end $$;
+
+create or replace function public.remove_friend(p_user uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  p := public._me();
+  delete from friends where (user_id = p.id and friend_id = p_user) or (user_id = p_user and friend_id = p.id);
+  if not found then raise exception 'You weren''t friends'; end if;
+  return jsonb_build_object('status', 'removed');
+end $$;
+
+create or replace function public.get_social() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  p := public._me_read();
+  return jsonb_build_object(
+    'friends', (select coalesce(jsonb_agg(public._public(o) || public._activity(o) || jsonb_build_object('since', f.since) order by o.username), '[]')
+                from friends f join profiles o on o.id = f.friend_id where f.user_id = p.id),
+    'incoming', (select coalesce(jsonb_agg(jsonb_build_object('request', r.id, 'at', r.created_at, 'player', public._public(o)) order by r.created_at desc), '[]')
+                 from friend_requests r join profiles o on o.id = r.from_id where r.to_id = p.id and r.status = 'pending'),
+    'outgoing', (select coalesce(jsonb_agg(jsonb_build_object('request', r.id, 'at', r.created_at, 'player', public._public(o)) order by r.created_at desc), '[]')
+                 from friend_requests r join profiles o on o.id = r.to_id where r.from_id = p.id and r.status = 'pending'),
+    'invites', (select count(*) from competition_members m join competitions c on c.id = m.comp_id
+                where m.user_id = p.id and m.status = 'invited' and c.ends_at > now()));
+end $$;
+
+-- A player's public profile, plus how they relate to you.
+create or replace function public.get_player(p_user uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; o public.profiles;
+begin
+  p := public._me_read();
+  select * into o from profiles where id = p_user;
+  if not found then raise exception 'Player not found'; end if;
+  return public._public(o) || public._activity(o) || jsonb_build_object(
+    'relation', public._relation(p.id, o.id),
+    'achievements', (select count(*) from unlocks u join achievement_defs d on d.id = u.item_id where u.user_id = o.id),
+    'records', (select coalesce(jsonb_agg(x), '[]') from (select distinct on (key) key, value, day from records where user_id = o.id order by key, value desc) x),
+    'recent_unlocks', (select coalesce(jsonb_agg(x order by x.created_at desc), '[]') from (
+        select item_id, created_at from unlocks where user_id = o.id order by created_at desc limit 6) x),
+    'recent_sets', (select coalesce(jsonb_agg(x order by x.created_at desc), '[]') from (
+        select kind, reps, source, created_at from sets where user_id = o.id order by created_at desc limit 6) x),
+    'friends_count', (select count(*) from friends where user_id = o.id));
+end $$;
+
+-- =================================================================== rivalries / private competitions
+create or replace function public.create_competition(p_name text, p_metric text, p_days int, p_cam_only boolean, p_invite uuid[]) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; cid bigint; x uuid;
+begin
+  p := public._me();
+  p_name := trim(coalesce(p_name, ''));
+  p_invite := coalesce(p_invite, '{}');
+  if char_length(p_name) < 3 or char_length(p_name) > 40 then raise exception 'Give it a name of 3-40 characters'; end if;
+  if p_metric not in ('reps','push','sit','squat','days') then raise exception 'Unknown scoring'; end if;
+  if p_days is null or p_days < 1 or p_days > 30 then raise exception 'Pick 1 to 30 days'; end if;
+  if cardinality(p_invite) < 1 or cardinality(p_invite) > 7 then raise exception 'Invite 1 to 7 friends'; end if;
+  if cardinality(p_invite) <> (select count(distinct v) from unnest(p_invite) v) then raise exception 'Invite each friend once'; end if;
+  foreach x in array p_invite loop
+    if not exists (select 1 from friends where user_id = p.id and friend_id = x) then raise exception 'You can only challenge friends'; end if;
+  end loop;
+  if (select count(*) from competitions where owner_id = p.id and ends_at > now()) >= 5 then raise exception 'You already run 5 challenges'; end if;
+  insert into competitions (owner_id, name, metric, cam_only, ends_at)
+  values (p.id, p_name, p_metric, coalesce(p_cam_only, true), now() + make_interval(days => p_days))
+  returning id into cid;
+  insert into competition_members (comp_id, user_id, status, joined_at) values (cid, p.id, 'joined', now());
+  insert into competition_members (comp_id, user_id, status) select cid, v, 'invited' from unnest(p_invite) v;
+  return jsonb_build_object('id', cid);
+end $$;
+
+create or replace function public.respond_competition(p_comp bigint, p_accept boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  p := public._me();
+  if not exists (select 1 from competitions where id = p_comp and ends_at > now()) then raise exception 'That challenge has ended'; end if;
+  update competition_members set status = case when p_accept then 'joined' else 'declined' end, joined_at = case when p_accept then now() end
+  where comp_id = p_comp and user_id = p.id and status = 'invited';
+  if not found then raise exception 'No invite for that challenge'; end if;
+  return jsonb_build_object('status', case when p_accept then 'joined' else 'declined' end);
+end $$;
+
+create or replace function public.leave_competition(p_comp bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  p := public._me();
+  if not exists (select 1 from competitions where id = p_comp and ends_at > now()) then raise exception 'That challenge has ended'; end if;
+  update competition_members set status = 'left' where comp_id = p_comp and user_id = p.id and status = 'joined';
+  if not found then raise exception 'You''re not in that challenge'; end if;
+  return jsonb_build_object('status', 'left');
+end $$;
+
+create or replace function public.get_competitions() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  p := public._me_read();
+  return (select coalesce(jsonb_agg(x order by (x->>'ends_at') desc), '[]') from (
+    select jsonb_build_object('id', c.id, 'name', c.name, 'metric', c.metric, 'cam_only', c.cam_only, 'daily_cap', c.daily_cap,
+      'starts_at', c.starts_at, 'ends_at', c.ends_at, 'owner_id', c.owner_id, 'my_status', mine.status,
+      'finished', c.ends_at <= now(),
+      'claimed', (select to_jsonb(cc) from competition_claims cc where cc.comp_id = c.id and cc.user_id = p.id),
+      'members', (select jsonb_agg(public._public(o) || jsonb_build_object('status', m.status,
+                    'score', case when m.status = 'joined' then public._comp_score(c, o.id) else 0 end)
+                  order by case when m.status = 'joined' then public._comp_score(c, o.id) else -1 end desc, o.username)
+                  from competition_members m join profiles o on o.id = m.user_id where m.comp_id = c.id and m.status in ('joined','invited'))) x
+    from competitions c join competition_members mine on mine.comp_id = c.id and mine.user_id = p.id
+    where mine.status in ('joined','invited') and (c.ends_at > now() - interval '30 days')) t);
+end $$;
+
+-- After the end: 150 Grit for first place (ties share it), 50 for taking part. Only counts when at least two
+-- players actually trained, and at most 3 paid claims a week, so it can't be farmed.
+create or replace function public.claim_competition(p_comp bigint) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare p public.profiles; c public.competitions; my int; best int; active int; place int; g int := 0; unl text[];
+begin
+  p := public._me();
+  select * into c from competitions where id = p_comp;
+  if not found then raise exception 'Challenge not found'; end if;
+  if c.ends_at > now() then raise exception 'That challenge is still running'; end if;
+  if not exists (select 1 from competition_members where comp_id = c.id and user_id = p.id and status = 'joined') then raise exception 'You didn''t take part'; end if;
+  if exists (select 1 from competition_claims where comp_id = c.id and user_id = p.id) then raise exception 'Reward already claimed'; end if;
+  my := public._comp_score(c, p.id);
+  select max(s), count(*) filter (where s > 0) into best, active
+    from (select public._comp_score(c, m.user_id) s from competition_members m where m.comp_id = c.id and m.status = 'joined') t;
+  place := 1 + (select count(*) from competition_members m where m.comp_id = c.id and m.status = 'joined' and public._comp_score(c, m.user_id) > my);
+  if my > 0 and active >= 2 then
+    g := case when my = best then 150 else 50 end;
+    if (select count(*) from competition_claims cc where cc.user_id = p.id and cc.grit > 0 and cc.claimed_at > now() - interval '7 days') >= 3 then g := 0; end if;
+  end if;
+  insert into competition_claims (comp_id, user_id, place, grit) values (c.id, p.id, place, g);
+  update profiles set grit = grit + g, comp_done = comp_done + 1, comp_wins = comp_wins + (case when my > 0 and my = best and active >= 2 then 1 else 0 end)
+  where id = p.id;
+  unl := public._award_user(p.id, 'rival');
+  select * into p from profiles where id = p.id;
+  return jsonb_build_object('profile', to_jsonb(p), 'place', place, 'grit', g, 'score', my, 'unlocks', to_jsonb(unl));
+end $$;
+
 -- =================================================================== reading history
 -- Everything the dashboard and calendar need for the last p_days days, in one call.
 create or replace function public.get_dashboard(p_days int default 400) returns jsonb
@@ -929,6 +1265,11 @@ alter table public.quest_claims enable row level security;
 alter table public.unlocks      enable row level security;
 alter table public.skill_defs   enable row level security;
 alter table public.achievement_defs enable row level security;
+alter table public.friend_requests enable row level security;
+alter table public.friends enable row level security;
+alter table public.competitions enable row level security;
+alter table public.competition_members enable row level security;
+alter table public.competition_claims enable row level security;
 
 drop policy if exists "Anyone can read profiles"   on public.profiles;
 drop policy if exists "Anyone can read sets"       on public.sets;
@@ -941,6 +1282,16 @@ drop policy if exists "Players read own claims"    on public.quest_claims;
 drop policy if exists "Anyone can read skills"     on public.skill_defs;
 drop policy if exists "Anyone can read achievements" on public.achievement_defs;
 create policy "Anyone can read skills"       on public.skill_defs       for select using (true);
+drop policy if exists "Players read own requests"  on public.friend_requests;
+drop policy if exists "Players read own friends"   on public.friends;
+drop policy if exists "Members read competitions"  on public.competitions;
+drop policy if exists "Players read own memberships" on public.competition_members;
+drop policy if exists "Players read own claims c"  on public.competition_claims;
+create policy "Players read own requests"    on public.friend_requests for select using (auth.uid() in (from_id, to_id));
+create policy "Players read own friends"     on public.friends for select using (user_id = auth.uid());
+create policy "Members read competitions"    on public.competitions for select using (exists (select 1 from public.competition_members m where m.comp_id = id and m.user_id = auth.uid()));
+create policy "Players read own memberships" on public.competition_members for select using (user_id = auth.uid());
+create policy "Players read own claims c"    on public.competition_claims for select using (user_id = auth.uid());
 create policy "Anyone can read achievements" on public.achievement_defs for select using (true);
 create policy "Anyone can read profiles"   on public.profiles     for select using (true);
 create policy "Anyone can read sets"       on public.sets         for select using (true);
@@ -953,8 +1304,10 @@ create policy "Players read own claims"    on public.quest_claims for select usi
 
 revoke insert, update, delete, truncate on
   public.profiles, public.sets, public.items, public.rest_days, public.records,
-  public.quest_defs, public.quest_claims, public.unlocks, public.skill_defs, public.achievement_defs
+  public.quest_defs, public.quest_claims, public.unlocks, public.skill_defs, public.achievement_defs,
+  public.friend_requests, public.friends, public.competitions, public.competition_members, public.competition_claims
   from anon, authenticated;
+grant select on public.friend_requests, public.friends, public.competitions, public.competition_members, public.competition_claims to authenticated;
 grant select on
   public.profiles, public.sets, public.items, public.rest_days, public.records,
   public.quest_defs, public.quest_claims, public.unlocks, public.skill_defs, public.achievement_defs, public.lb_weekly
@@ -966,7 +1319,9 @@ revoke execute on function
   public._week_start(date), public._streak(public.profiles, date), public._unlock(public.profiles, text, text, date),
   public._metric(uuid, text, date, date), public._assigned(uuid, date), public._record(uuid, text, int, text, bigint, date),
   public._has(public.profiles, text), public._level(int), public._sp_free(public.profiles), public._ach_due(public.profiles, date),
-  public._quest_grit(public.profiles, public.quest_defs), public._quest_xp(public.profiles, public.quest_defs)
+  public._quest_grit(public.profiles, public.quest_defs), public._quest_xp(public.profiles, public.quest_defs),
+  public._award_user(uuid, text), public._comp_score(public.competitions, uuid), public._public(public.profiles),
+  public._relation(uuid, uuid), public._activity(public.profiles), public._befriend(uuid, uuid)
   from public, anon, authenticated;
 
 -- player actions: signed-in players only
@@ -974,11 +1329,19 @@ revoke execute on function
   public.create_profile(text), public.set_timezone(text), public.submit_set(text, int, int, text, boolean),
   public.log_rest_day(), public.get_quests(), public.claim_quest(text), public.claim_daily(),
   public.buy_item(text), public.equip(text), public.get_dashboard(int), public.day_detail(date), public.record_history(text),
-  public.unequip(text), public.unlock_skill(text), public.set_showcase(text[]), public.get_achievements()
+  public.unequip(text), public.unlock_skill(text), public.set_showcase(text[]), public.get_achievements(),
+  public.search_players(text), public.send_friend_request(uuid), public.respond_friend_request(bigint, boolean),
+  public.cancel_friend_request(bigint), public.remove_friend(uuid), public.get_social(), public.get_player(uuid),
+  public.create_competition(text, text, int, boolean, uuid[]), public.respond_competition(bigint, boolean),
+  public.leave_competition(bigint), public.get_competitions(), public.claim_competition(bigint)
   from public, anon;
 grant execute on function
   public.create_profile(text), public.set_timezone(text), public.submit_set(text, int, int, text, boolean),
   public.log_rest_day(), public.get_quests(), public.claim_quest(text), public.claim_daily(),
   public.buy_item(text), public.equip(text), public.get_dashboard(int), public.day_detail(date), public.record_history(text),
-  public.unequip(text), public.unlock_skill(text), public.set_showcase(text[]), public.get_achievements()
+  public.unequip(text), public.unlock_skill(text), public.set_showcase(text[]), public.get_achievements(),
+  public.search_players(text), public.send_friend_request(uuid), public.respond_friend_request(bigint, boolean),
+  public.cancel_friend_request(bigint), public.remove_friend(uuid), public.get_social(), public.get_player(uuid),
+  public.create_competition(text, text, int, boolean, uuid[]), public.respond_competition(bigint, boolean),
+  public.leave_competition(bigint), public.get_competitions(), public.claim_competition(bigint)
   to authenticated;

@@ -21,11 +21,11 @@
       <span class="who"><b id="hName">Player</b><small id="hTitle">Rookie</small></span>
     </button>
     <div class="top-right">
-      <div class="lvl" title="Level">
+      <div class="lvl" title="Level · open skills" data-go="skills" role="button" tabindex="0">
         <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17" fill="none" stroke="var(--line-2)" stroke-width="3"/><circle id="hLvlRing" cx="20" cy="20" r="17" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-dasharray="0 107"/></svg>
         <span id="hLvl" class="num">1</span>
       </div>
-      <div class="grit-pill" id="hGritPill" title="Grit"><svg class="i" data-icon="coin"></svg><b id="hGrit">0</b></div>
+      <div class="grit-pill" id="hGritPill" title="Grit · open the store" data-go="store" role="button" tabindex="0"><svg class="i" data-icon="coin"></svg><b id="hGrit">0</b></div>
     </div>
   </header>
 
@@ -137,6 +137,13 @@
       <p class="note">Quest targets stay the same no matter how much you train, and rewards never grow past the target. Listen to your body and take rest days.</p>
     </section>
 
+    <!-- FRIENDS -->
+    <section class="view" id="view-friends" aria-label="Friends" hidden>
+      <div class="view-head"><h2>Friends</h2></div>
+      <div class="seg" id="socialSeg" role="group" aria-label="Friends view"></div>
+      <div class="social-body" id="socialBody"></div>
+    </section>
+
     <!-- PROGRESSION -->
     <section class="view" id="view-skills" aria-label="Progression" hidden>
       <div class="view-head"><h2>Progression</h2>
@@ -205,10 +212,12 @@
     <button class="tab" type="button" data-go="train"><svg class="i" data-icon="dumbbell"></svg><span>Train</span></button>
     <button class="tab" type="button" data-go="hub"><svg class="i" data-icon="chart"></svg><span>Hub</span></button>
     <button class="tab" type="button" data-go="quests"><svg class="i" data-icon="scroll"></svg><span>Quests</span><b class="q-badge" hidden>0</b></button>
-    <button class="tab" type="button" data-go="skills"><svg class="i" data-icon="tree"></svg><span>Skills</span></button>
+    <button class="tab" type="button" data-go="friends"><svg class="i" data-icon="users"></svg><span>Friends</span><b class="q-badge s-badge" hidden>0</b></button>
+    <button class="tab desk" type="button" data-go="skills"><svg class="i" data-icon="tree"></svg><span>Skills</span></button>
     <button class="tab" type="button" data-go="ranks"><svg class="i" data-icon="trophy"></svg><span>Ranks</span></button>
-    <button class="tab" type="button" data-go="store"><svg class="i" data-icon="bag"></svg><span>Store</span></button>
+    <button class="tab desk" type="button" data-go="store"><svg class="i" data-icon="bag"></svg><span>Store</span></button>
     <button class="tab desk" type="button" data-go="me"><svg class="i" data-icon="user"></svg><span>Profile</span></button>
+    <button class="tab mob" type="button" data-more aria-haspopup="dialog"><svg class="i" data-icon="grid"></svg><span>More</span></button>
   </div>
   <div class="nav-foot desk"><span class="net" id="navNet">Local</span></div>
 </nav>

@@ -6,6 +6,7 @@ import { createSpotify } from "./spotify.js";
 import { $, esc, fmt, clock, relTime, dayLabel, icon, hydrateIcons, emblem, toast, openSheet, closeSheet, avatarHTML, nameHTML, rankHTML } from "./ui.js";
 import { renderStore, renderLocker, bindStore } from "./store.js";
 import { loadProgression, bindProgression } from "./progression.js";
+import { loadSocial, bindSocial, refreshSocialBadge } from "./social.js";
 import { loadHub, bindHub } from "./hub.js";
 import { loadQuests, bindQuests, refreshQuestBadge } from "./quests.js";
 
@@ -65,7 +66,7 @@ const appCtx = { backend, me: () => me, applyTheme: () => me && applyTheme(me.th
   setMe: (p) => { me = p; renderHeader(); if (view === "train" || view === "store" || view === "me") renderView(); } };
 
 // ------------------------------------------------------------------ routing
-const VIEWS = ["train", "hub", "quests", "skills", "ranks", "store", "me"];
+const VIEWS = ["train", "hub", "quests", "friends", "skills", "ranks", "store", "me"];
 function go(v, push = true) {
   if (!VIEWS.includes(v)) v = "train";
   view = v;
@@ -78,6 +79,8 @@ function go(v, push = true) {
   if (v === "hub" && me) loadHub(appCtx);
   if (v === "quests" && me) loadQuests(appCtx);
   if (v === "skills" && me) loadProgression(appCtx);
+  if (v === "friends" && me) loadSocial(appCtx);
+  document.querySelector(".tab.mob")?.setAttribute("aria-current", ["skills", "store", "me"].includes(v) ? "page" : "false");
 }
 function renderView() {
   if (!me) return;
@@ -85,7 +88,15 @@ function renderView() {
   else if (view === "store") renderStore(appCtx);
   else if (view === "me") renderMe();
 }
-document.addEventListener("click", (e) => { const g = e.target.closest("[data-go]"); if (g) go(g.dataset.go); });
+document.addEventListener("click", (e) => {
+  const g = e.target.closest("[data-go]"); if (g) { if (g.closest("#sheet")) closeSheet(); go(g.dataset.go); return; }
+  if (e.target.closest("[data-more]")) openSheet(`<span class="eyebrow">More</span><div class="more-grid">
+    <button class="panel more-item" type="button" data-go="skills">${icon("tree")}<b>Skills</b><small>Skill tree and achievements</small></button>
+    <button class="panel more-item" type="button" data-go="store">${icon("bag")}<b>Store</b><small>Boosts and cosmetics</small></button>
+    <button class="panel more-item" type="button" data-go="me">${icon("user")}<b>Profile</b><small>Locker, showcase, settings</small></button></div>
+    <button class="btn ghost" type="button" data-close>Close</button>`, "More");
+});
+document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches?.('[role="button"][data-go]')) { e.preventDefault(); go(e.target.dataset.go); } });
 window.addEventListener("hashchange", () => go(location.hash.slice(1), false));
 
 // ------------------------------------------------------------------ train
@@ -343,7 +354,7 @@ async function loadBoard() {
     const unit = unitFor(board);
     const top = rows.slice(0, 3), rest = rows.slice(3);
     const order = [top[1], top[0], top[2]];
-    $("#podium").innerHTML = rows.length >= 3 ? order.map((r, i) => r ? `<div class="panel pod p${[2, 1, 3][i]}">
+    $("#podium").innerHTML = rows.length >= 3 ? order.map((r, i) => r ? `<div class="panel pod p${[2, 1, 3][i]} ${backend.mode === "online" && r.id !== me?.id ? "clickable" : ""}" ${backend.mode === "online" && r.id !== me?.id ? `data-player="${esc(r.id)}"` : ""}>
         <span class="place">${[2, 1, 3][i]}</span>${avatarHTML(r, "lg")}${rankHTML(r, "sm")}
         <span class="nm" style="color:${nameColor(r.theme)}">${nameHTML(r)}</span><span class="tt">${esc(titleName(r.title))}</span>
         <span class="val">${fmt(r.value)}<span class="unit">${unit}</span></span></div>` : "<div></div>").join("") : "";
@@ -368,7 +379,8 @@ async function loadBoard() {
 }
 function row(r, pos, unit, mine, bare) {
   const inner = `<span class="pos">${pos}</span>${avatarHTML(r, "sm")}<span class="who-c"><span class="nm" style="color:${nameColor(r.theme)}">${nameHTML(r)}${mine ? " (you)" : ""}</span><span class="tt">${esc(titleName(r.title))}</span></span><span class="val">${fmt(r.value)}<span class="unit">${unit}</span></span>`;
-  return bare ? inner : `<li class="${mine ? "mine" : ""}">${inner}</li>`;
+  const link = backend.mode === "online" && !mine ? ` data-player="${esc(r.id)}" tabindex="0"` : "";
+  return bare ? inner : `<li class="${mine ? "mine" : ""} ${link ? "clickable" : ""}"${link}>${inner}</li>`;
 }
 
 // ------------------------------------------------------------------ equip (reward sheet)
@@ -483,7 +495,7 @@ async function syncTimezone() {
 }
 async function boot() {
   hydrateIcons();
-  bindHub(); bindQuests(); bindStore(appCtx); bindProgression();
+  bindHub(); bindQuests(); bindStore(appCtx); bindProgression(); bindSocial(appCtx);
   const net = backend.mode === "online";
   $("#navNet").textContent = net ? "Live leaderboards" : "Local mode";
   $("#navNet").classList.toggle("on", net);
@@ -496,7 +508,7 @@ async function boot() {
     setTimeout(() => $("#obName").focus(), 50);
   } else { await syncTimezone(); renderHeader(); }
   go(location.hash.slice(1) || "train", false);
-  if (me) refreshQuestBadge(appCtx);
+  if (me) { refreshQuestBadge(appCtx); refreshSocialBadge(appCtx); setInterval(() => refreshSocialBadge(appCtx), 60000); }
   pollSpotify();
 }
 $("#onboardForm").addEventListener("submit", async (e) => {

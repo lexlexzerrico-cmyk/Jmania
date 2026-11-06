@@ -322,6 +322,12 @@ class LocalBackend {
     return { unlocked: d.unlocks.filter((u) => achievement(u.item_id)).map((u) => ({ id: u.item_id, at: new Date(u.at).toISOString(), day: u.local_day })),
       sp_free: spFree(p), level: levelFor(p.xp).level };
   }
+  // Friends and challenges need other players, so they only exist online.
+  _online() { return Promise.reject(new Error("Friends and challenges need the online leaderboard. Add your Supabase keys in js/config.js.")); }
+  searchPlayers() { return this._online(); } sendFriendRequest() { return this._online(); } respondFriendRequest() { return this._online(); }
+  cancelFriendRequest() { return this._online(); } removeFriend() { return this._online(); } getSocial() { return this._online(); }
+  getPlayer() { return this._online(); } createCompetition() { return this._online(); } respondCompetition() { return this._online(); }
+  leaveCompetition() { return this._online(); } getCompetitions() { return this._online(); } claimCompetition() { return this._online(); }
   async leaderboard(board) {
     const d = this._load(); if (!d) return { rows: [], me: null };
     const p = this._fix(d.profile), col = BOARDS[board].col;
@@ -374,6 +380,19 @@ class SupaBackend {
   unlockSkill(id) { return this._rpc("unlock_skill", { p_skill: id }); }
   setShowcase(ids) { return this._rpc("set_showcase", { p_ids: ids }); }
   getAchievements() { return this._rpc("get_achievements"); }
+  // social (online only)
+  searchPlayers(q) { return this._rpc("search_players", { p_q: q }); }
+  sendFriendRequest(id) { return this._rpc("send_friend_request", { p_user: id }); }
+  respondFriendRequest(req, accept) { return this._rpc("respond_friend_request", { p_request: req, p_accept: accept }); }
+  cancelFriendRequest(req) { return this._rpc("cancel_friend_request", { p_request: req }); }
+  removeFriend(id) { return this._rpc("remove_friend", { p_user: id }); }
+  getSocial() { return this._rpc("get_social"); }
+  getPlayer(id) { return this._rpc("get_player", { p_user: id }); }
+  createCompetition({ name, metric, days, camOnly, invite }) { return this._rpc("create_competition", { p_name: name, p_metric: metric, p_days: days, p_cam_only: camOnly, p_invite: invite }); }
+  respondCompetition(id, accept) { return this._rpc("respond_competition", { p_comp: id, p_accept: accept }); }
+  leaveCompetition(id) { return this._rpc("leave_competition", { p_comp: id }); }
+  getCompetitions() { return this._rpc("get_competitions"); }
+  claimCompetition(id) { return this._rpc("claim_competition", { p_comp: id }); }
   async leaderboard(board, me) {
     const col = BOARDS[board].col;
     if (board === "weekly") {
